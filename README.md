@@ -213,7 +213,6 @@ Slow or scheduled work runs in the background, in small steps, so nothing hits V
 | --- | --- | --- |
 | Gap check | When you ask for one | Brief → five reviewers (in parallel) → verdict and write-up. Inovo answers at once; the chat shows progress and then the verdict. |
 | Morning brief | 8:00 in each company's time zone (Company → Access) | One job per company, so one failure never stops the rest. |
-| Gmail → tasks | Every 5 minutes, for every company with Google connected, even with the app closed | One job per company. |
 | WhatsApp reply | Each incoming message | One job per message. |
 
 A failed step is retried after 30 s and then 60 s; after 3 tries the job is marked `failed` with the

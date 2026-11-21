@@ -1,4 +1,4 @@
--- Background jobs: slow or scheduled work (gap checks, morning briefs, Gmail checks,
+-- Background jobs: slow or scheduled work (gap checks, morning briefs,
 -- WhatsApp replies) runs in small steps outside the user's request, with retries.
 -- Run AFTER multitenant.sql, in the Supabase SQL Editor. Safe to run more than once.
 -- Then run schedule-jobs.sql once to start the every-minute worker.
@@ -9,7 +9,7 @@ create table if not exists jobs (
   id            uuid primary key default gen_random_uuid(),
   org_id        uuid references organizations(id) on delete cascade,
   user_id       uuid references auth.users(id) on delete set null,
-  kind          text not null,                 -- gap-check, brief, gmail-sync, whatsapp-message
+  kind          text not null,                 -- gap-check, brief, whatsapp-message
   status        text not null default 'queued' check (status in ('queued', 'running', 'done', 'failed')),
   input         jsonb not null default '{}',
   state         jsonb not null default '{}',   -- progress between steps

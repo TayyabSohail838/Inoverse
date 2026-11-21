@@ -218,7 +218,7 @@ export default function TasksPanel({ dbReady }) {
         ) : (
           <>
             <p className="muted">
-              Connected as <b>{gmail.account || "your Google account"}</b>. Checked every 5 minutes while Inoverse is open
+              Connected as <b>{gmail.account || "your Google account"}</b>. Checked each time you open Inoverse, and every 5 minutes while it's open
               {gmail.last_synced_at ? `, last at ${new Date(gmail.last_synced_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : ""}.
             </p>
             <p className="muted">

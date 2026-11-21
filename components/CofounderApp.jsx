@@ -161,21 +161,37 @@ export default function CofounderApp() {
     return () => data.subscription.unsubscribe();
   }, [status?.auth?.url, loadStatus]);
 
-  // Check Gmail for new "Inovo" emails when the app opens and every 5 minutes.
+  // Check Gmail for new "Inovo" emails only while the app is open: every time you open it,
+  // every time you come back to its tab, and every 5 minutes while you're on it.
+  // (Nothing checks Gmail while the app is closed.)
   useEffect(() => {
     if (!dbReady) return;
+    let last = 0;
+    let running = false;
     const sync = async () => {
+      if (running || document.visibilityState !== "visible") return;
+      running = true;
+      last = Date.now();
       try {
         const r = await api("/api/tasks/sync", { method: "POST" });
         if (r.added) window.dispatchEvent(new Event("inoverse:tasks-updated"));
       } catch {} // quiet: the Tasks tab shows problems when you open it
+      running = false;
     };
-    // first check a few seconds after opening, so it doesn't slow down the first screen
-    const first = setTimeout(sync, 5000);
+    // right after opening (a moment later, so the first screen loads first)
+    const first = setTimeout(sync, 1500);
+    // back to the tab: check again, unless it was checked in the last minute
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && Date.now() - last > 60_000) sync();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
     const t = setInterval(sync, 5 * 60 * 1000);
     return () => {
       clearTimeout(first);
       clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
     };
   }, [dbReady]);
 
