@@ -2,7 +2,7 @@
 // The whole app: the woven 3D cofounder on the left, the working panel on the right.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, prefetch, setAccessCode, authHeaders } from "@/lib/api";
-import { initAuth, accessToken, authClient, getOrgId, setOrgId } from "@/lib/session";
+import { initAuth, accessToken, authClient, getOrgId, setOrgId, savedAuthConfig, saveAuthConfig } from "@/lib/session";
 import AuthPanel from "@/components/AuthPanel";
 import { EvidencePanel, TestsPanel, WeeklyPanel, CompanyPanel } from "@/components/Panels";
 import Markdown, { plainText } from "@/components/Markdown";
@@ -80,43 +80,72 @@ export default function CofounderApp() {
   useEffect(() => {
     if (!liveOn) return void liveRef.current?.end();
     if (!status || (authOn && !me?.org)) return;
-    // get the company context ready now, so the first Talk starts faster
-    api("/api/live").catch(() => {});
+    // get the company context ready, so the first Talk starts faster; a moment after
+    // opening, so it doesn't compete with the saved chat for the first screen
+    const t = setTimeout(() => api("/api/live").catch(() => {}), 2500);
+    return () => clearTimeout(t);
   }, [liveOn, status, authOn, me]);
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [log, tab]);
 
-  // setup status + saved conversation
+  // saved history first; keep anything already on screen this visit (like the greeting)
+  const showSaved = useCallback((messages = []) => {
+    setLog((cur) => [...messages.map((m) => ({ role: m.role, text: m.text, skill: m.skill })), ...cur.filter((m) => m.live)]);
+    historyRef.current = messages.slice(-8).map((m) => ({ role: m.role, text: m.text }));
+  }, []);
+
+  // Opening the app. Kept to as few round trips in a row as possible:
+  //   /api/status and /api/me?with=messages run at the same time (the sign-in settings are
+  //   remembered from the last visit), /api/me brings the saved chat with it, and the other
+  //   panels' data is fetched only once the chat is on screen.
   const loadStatus = useCallback(async () => {
     try {
+      const meFor = async () => ((await accessToken()) ? api("/api/me?with=messages") : null);
+      const saved = savedAuthConfig();
+      let early = null;
+      if (saved) {
+        initAuth(saved);
+        early = meFor();
+        early.catch(() => {}); // handled below, once we know accounts are on
+      }
       const s = await fetch("/api/status").then((r) => r.json());
       setStatus(s);
       if (s.auth?.required) {
         // accounts: sign in, then pick (or start) a company, before loading anything private
         if (!s.auth.configured || !s.supabase?.ok) return; // SetupNotice says what's missing
+        if (saved && saved.url !== s.auth.url) {
+          // the app moved to another Supabase project: start over with the new settings
+          saveAuthConfig(s.auth);
+          return window.location.reload();
+        }
+        saveAuthConfig(s.auth);
         initAuth({ url: s.auth.url, anonKey: s.auth.anonKey });
-        if (!(await accessToken())) return setGate("signin");
-        const who = await api("/api/me");
+        let who;
+        try {
+          who = await (early || meFor());
+        } catch (e) {
+          if (e.status === 401) return setGate("signin");
+          throw e;
+        }
+        if (!who) return setGate("signin");
         setMe(who);
         if (!who.org) return setGate("org");
         if (who.org.id !== getOrgId()) setOrgId(who.org.id); // remember the company that opened
         setGate("");
+        showSaved(who.messages);
         // back from Google sign-in or an email link: tidy the address
         if (new URLSearchParams(window.location.search).has("auth")) window.history.replaceState(null, "", `${window.location.pathname}#app`);
+      } else if (s.supabase?.ok) {
+        showSaved((await api("/api/messages")).messages);
       }
-      if (s.supabase?.ok) {
-        // load every panel's data now, so opening a panel shows it straight away
-        prefetch(PANEL_DATA);
-        const { messages } = await api("/api/messages");
-        // saved history first; keep anything already on screen this visit (like the greeting)
-        setLog((cur) => [...messages.map((m) => ({ role: m.role, text: m.text, skill: m.skill })), ...cur.filter((m) => m.live)]);
-        historyRef.current = messages.slice(-8).map((m) => ({ role: m.role, text: m.text }));
-      }
+      // every panel's data, so opening a panel shows it straight away; after the first
+      // screen is up, so it doesn't slow it down
+      if (s.supabase?.ok) setTimeout(() => prefetch(PANEL_DATA), 1200);
     } catch (e) {
       setError(e.message);
     }
-  }, []);
+  }, [showSaved]);
 
   // Signed in (form, Google or email link) or out: reload. Only while the sign-in panel is up
   // or on sign-out, since Supabase also reports routine token refreshes.
@@ -141,9 +170,13 @@ export default function CofounderApp() {
         if (r.added) window.dispatchEvent(new Event("inoverse:tasks-updated"));
       } catch {} // quiet: the Tasks tab shows problems when you open it
     };
-    sync();
+    // first check a few seconds after opening, so it doesn't slow down the first screen
+    const first = setTimeout(sync, 5000);
     const t = setInterval(sync, 5 * 60 * 1000);
-    return () => clearInterval(t);
+    return () => {
+      clearTimeout(first);
+      clearInterval(t);
+    };
   }, [dbReady]);
 
   // Back from Google sign-in: open the Tasks tab and say how it went.

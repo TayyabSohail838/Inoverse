@@ -5,6 +5,8 @@ import { serviceDb, dbEnabled, anonKey, supabaseUrl } from "@/lib/db";
 import { isDemo } from "@/lib/demo";
 import { authRequired, authConfigured } from "@/lib/auth";
 
+let tablesOkAt = 0;
+
 export async function GET() {
   const status = {
     accessCodeRequired: Boolean(process.env.ACCESS_CODE) && !dbEnabled(),
@@ -24,8 +26,12 @@ export async function GET() {
 
   if (status.supabase.configured) {
     try {
-      const { error } = await serviceDb().from("organizations").select("id").limit(1);
-      if (error) throw new Error(error.message);
+      // once the tables are confirmed, skip the database for 5 minutes: every page load asks
+      if (Date.now() - tablesOkAt > 5 * 60 * 1000) {
+        const { error } = await serviceDb().from("organizations").select("id").limit(1);
+        if (error) throw new Error(error.message);
+        tablesOkAt = Date.now();
+      }
       status.supabase.ok = true;
     } catch (err) {
       status.supabase.error = /organizations|relation .* does not exist|schema cache/i.test(err.message)
