@@ -245,6 +245,35 @@ body {
   flex: 1;
   border-top: 1px solid var(--woad-soft);
 }
+/* A gap check running in the background: a quiet status line with a pulsing role-coloured dot */
+.job-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 0;
+  color: var(--cotton-dim);
+  font-size: 13px;
+}
+.job-progress::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--role);
+  animation: job-pulse 1.2s ease-in-out infinite;
+}
+@keyframes job-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .job-progress::before {
+    animation: none;
+  }
+}
+
 /* AI allowance meter (Company → Access → AI usage): a thin bar in the role colour */
 .meter-row {
   display: grid;

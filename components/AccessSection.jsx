@@ -14,6 +14,7 @@ export default function AccessSection({ me }) {
   const [invite, setInvite] = useState({ email: "", role: "member" });
   const [phone, setPhone] = useState("");
   const [newOrg, setNewOrg] = useState("");
+  const [tz, setTz] = useState(me?.org?.timezone || "");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [saved, setSaved] = useState("");
@@ -88,6 +89,27 @@ export default function AccessSection({ me }) {
           <button className="link" onClick={signOut}>Sign out</button>
         </div>
       </div>
+
+      {me.org?.timezone && (
+        <form
+          className="row form"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            await call("tz", () => api("/api/orgs", { method: "PATCH", body: { timezone: tz.trim() } }), `Time zone set to ${tz.trim()}. The morning brief comes at 8:00 there.`);
+          }}
+        >
+          <label>
+            Company time zone (morning brief at 8:00 here)
+            <input list="tz-list" value={tz} onChange={(e) => setTz(e.target.value)} disabled={!isOwner} placeholder="Asia/Karachi" />
+          </label>
+          <datalist id="tz-list">
+            {(typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : []).map((z) => (
+              <option key={z} value={z} />
+            ))}
+          </datalist>
+          {isOwner && <button className="btn quiet" disabled={!!busy || !tz.trim() || tz.trim() === me.org.timezone}>{busy === "tz" ? "Saving…" : "Save"}</button>}
+        </form>
+      )}
 
       <h2>People with access</h2>
       <ul className="list compact">
@@ -212,7 +234,7 @@ export default function AccessSection({ me }) {
           setBusy("org");
           setError("");
           try {
-            const { org } = await api("/api/orgs", { method: "POST", body: { name: newOrg } });
+            const { org } = await api("/api/orgs", { method: "POST", body: { name: newOrg, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone } });
             switchOrg(org.id);
           } catch (err) {
             setError(err.message);

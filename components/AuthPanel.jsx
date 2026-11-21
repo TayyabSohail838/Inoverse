@@ -137,7 +137,8 @@ function NewCompany({ email, onDone }) {
     setBusy(true);
     setError("");
     try {
-      const { org } = await api("/api/orgs", { method: "POST", body: { name } });
+      // the browser's time zone, so the morning brief arrives at 8:00 the founder's time
+      const { org } = await api("/api/orgs", { method: "POST", body: { name, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone } });
       setOrgId(org.id);
       onDone();
     } catch (err) {

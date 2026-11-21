@@ -472,9 +472,10 @@ export default function CofounderApp() {
         if (answeredAs) setRoleKey(answeredAs);
         setLog((l) => [
           ...l,
-          { role: "assistant", text: data.details || data.say, skill: data.skill, gapCheck: data.gapCheck, experimentId: data.experimentId, action, simulation: data.simulation ? true : undefined, live: true },
+          { role: "assistant", text: data.details || data.say, skill: data.skill, gapCheck: data.gapCheck, experimentId: data.experimentId, action, simulation: data.simulation ? true : undefined, live: true, ...(data.jobId ? { jobId: data.jobId, progress: JOB_STAGE.start } : {}) },
         ]);
         historyRef.current = [...historyRef.current, { role: "assistant", text: data.details || data.say }].slice(-8);
+        if (data.jobId) followJob(data.jobId, { speakIt: false }); // Live is talking: the verdict just appears
         turn.toolLogged = true;
         return {
           say: data.say,
@@ -769,6 +770,33 @@ export default function CofounderApp() {
     say(voice, Boolean(voice));
   }
 
+  // A gap check runs as a background job (a minute or so): show its progress in the chat,
+  // then swap in the verdict when it's done.
+  async function followJob(jobId, { speakIt }) {
+    const update = (patch) => setLog((l) => l.map((m) => (m.jobId === jobId ? { ...m, ...patch } : m)));
+    const started = Date.now();
+    while (Date.now() - started < 5 * 60 * 1000) {
+      await new Promise((r) => setTimeout(r, 2500));
+      let j;
+      try {
+        j = await api(`/api/jobs/${jobId}?t=${Date.now()}`);
+      } catch {
+        continue; // a hiccup: ask again
+      }
+      if (j.status === "done" && j.result) {
+        const r = j.result;
+        update({ text: r.details || r.say, gapCheck: r.gapCheck, experimentId: r.experimentId, progress: null, jobId: null });
+        historyRef.current = [...historyRef.current, { role: "assistant", text: r.details || r.say }].slice(-8);
+        if (r.role) setRoleKey(r.role);
+        if (speakIt && !liveRef.current) speak(r.say);
+        return;
+      }
+      if (j.status === "failed") return update({ text: j.error, progress: null, jobId: null });
+      update({ progress: JOB_STAGE[j.stage] || JOB_STAGE.start });
+    }
+    update({ progress: "Still working on it. The verdict will be in the Tests tab shortly.", jobId: null });
+  }
+
   async function ask(raw, { fromVoice = false } = {}) {
     const message = raw.trim();
     if (!message) return;
@@ -803,8 +831,9 @@ export default function CofounderApp() {
       if (answeredAs) setRoleKey(answeredAs);
       setLog((l) => [
         ...l,
-        { role: "assistant", text: data.details || data.say, skill: data.skill, gapCheck: data.gapCheck, experimentId: data.experimentId, action, simulation: data.simulation ? true : undefined },
+        { role: "assistant", text: data.details || data.say, skill: data.skill, gapCheck: data.gapCheck, experimentId: data.experimentId, action, simulation: data.simulation ? true : undefined, ...(data.jobId ? { jobId: data.jobId, progress: JOB_STAGE.start } : {}) },
       ]);
+      if (data.jobId) followJob(data.jobId, { speakIt: true });
       speak(
         action?.blocked
           ? langRef.current === "ur"
@@ -1061,6 +1090,7 @@ export default function CofounderApp() {
                             })()}
                             {m.gapCheck && <GapCard gap={m.gapCheck} onOpenTests={() => setTab("tests")} />}
                             <div className="text">{m.role === "assistant" ? <Markdown text={m.text} /> : m.text}</div>
+                            {m.progress && <p className="job-progress" role="status">{m.progress}</p>}
                             {m.simulation && (
                               <div className="action">
                                 <button className="link" onClick={() => setTab("simulate")}>Open the full simulation</button>
@@ -1132,6 +1162,13 @@ const DOCK = [
   { key: "weekly", label: "Weekly", title: "Weekly review" },
   { key: "company", label: "Company", title: "Company" },
 ];
+
+// What a running gap check is doing, by job stage (lib/jobKinds.js).
+const JOB_STAGE = {
+  start: "Writing the brief…",
+  panel: "Five reviewers are reading it: Critic, Champion, Analyst, Investigator, Customer…",
+  judge: "Writing up the verdict and your 48-hour test…",
+};
 
 // Shown in the conversation list before you've said anything.
 const TRY = [

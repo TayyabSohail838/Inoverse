@@ -33,7 +33,7 @@ export const GET = route(
         ...(withMessages ? { messages: await recentMessages().catch(() => []) } : {}),
       });
     }
-    const org = t.orgId ? { id: t.orgId, name: t.orgName, role: t.role } : null;
+    const org = t.orgId ? { id: t.orgId, name: t.orgName, role: t.role, timezone: t.orgTimezone } : null;
     const [set, messages] = await Promise.all([
       org ? profileSet().catch(() => true) : true,
       org && withMessages ? recentMessages().catch(() => []) : null,

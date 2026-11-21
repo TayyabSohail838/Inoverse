@@ -252,6 +252,10 @@ Supabase is set up (not on the public demo).
   30px in the role colour, selectable with one click. It's the one thing to copy, so it's big.
 - **AI usage** (Company → Access): one thin meter per allowance (`.meter`, 4px, `--role` on
   `--woad-soft`), with "used of limit · resets at" in `--cotton-dim`, then this month's calls per feature.
+- **Background gap check**: while it runs, the answer shows a quiet status line under it
+  (`.job-progress`: 13px `--cotton-dim` text after a pulsing `--role` dot, still with reduced
+  motion) naming the step ("Five reviewers are reading it…"); the verdict card replaces it.
+- **Company time zone** (Company → Access): owners set it; the morning brief arrives at 8:00 there.
 - Switching company or signing out reloads the page, so nothing from the previous company
   stays on screen.
 

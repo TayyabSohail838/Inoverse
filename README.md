@@ -83,6 +83,8 @@ That's enough to talk to the cofounder. Without Supabase it reads `data/company-
 4. Paste `supabase/people.sql` and click **Run** (tasks, People, Google and WhatsApp tables).
 5. Paste `supabase/multitenant.sql` and click **Run**. This adds accounts and companies: each company sees only its own data. Your existing data (from `seed.sql`) moves into a company called `inovix`. Run `seed.sql` *before* this file, not after.
 6. Paste `supabase/usage.sql` and click **Run**. It adds AI usage limits and tracking (see "AI usage" below).
+   Then `supabase/jobs.sql` (background jobs), and once your app is deployed, `supabase/schedule-jobs.sql`
+   with your app URL and jobs secret filled in (see "Background jobs" below).
 7. Open `supabase/claim-org.sql`, put **your** email on the select line, and **Run** it. That invites you as the owner of the `inovix` company; you join it the first time you sign in.
 8. Open **Project Settings** → **API** (or **API Keys**). Copy:
    - the **Project URL** → `SUPABASE_URL`
@@ -203,6 +205,31 @@ where u.created_at >= date_trunc('month', now()) and not u.demo
 group by 1, 2 order by 4 desc;
 ```
 
+### Background jobs
+
+Slow or scheduled work runs in the background, in small steps, so nothing hits Vercel's 60-second limit:
+
+| Job | When | Steps |
+| --- | --- | --- |
+| Gap check | When you ask for one | Brief → five reviewers (in parallel) → verdict and write-up. Inovo answers at once; the chat shows progress and then the verdict. |
+| Morning brief | 8:00 in each company's time zone (Company → Access) | One job per company, so one failure never stops the rest. |
+| Gmail → tasks | Every 5 minutes, for every company with Google connected, even with the app closed | One job per company. |
+| WhatsApp reply | Each incoming message | One job per message. |
+
+A failed step is retried after 30 s and then 60 s; after 3 tries the job is marked `failed` with the
+reason. Finished jobs are kept for a week in the `jobs` table.
+
+The worker is `/api/jobs/run`. It starts right after a job is added, and every minute from Supabase
+(`schedule-jobs.sql`, which uses the `pg_cron` and `pg_net` extensions). Vercel Cron also starts it
+once a day as a fallback. Calls must carry the jobs secret: `JOBS_SECRET` if you set one, otherwise a
+value derived from your service key. To see recent jobs:
+
+```sql
+select kind, status, error, attempts, created_at from jobs order by created_at desc limit 20;
+```
+
+Without `jobs.sql`, everything still works the old way (inside the request).
+
 Which models are busy or out of quota is shared through `ai_model_status`, so every server copy skips
 them straight away. If `usage.sql` hasn't been run, nothing breaks: limits and tracking are simply off.
 
@@ -261,6 +288,9 @@ All routes return JSON. With Supabase set up, send the signed-in user's Supabase
 | `GET /api/me` | The signed-in user, their companies and the open one |
 | `POST /api/orgs` | Start a company: `{ name }` (you become its owner) |
 | `GET, POST /api/orgs/access` · `DELETE /api/orgs/access/:id` | Members and invites; owners invite (`{ email, role }`) and remove; `?kind=invite` cancels an invite |
+| `GET /api/jobs/:id` | A background job's status and stage, and its result when done (the company's own jobs only) |
+| `POST /api/jobs/run` | Starts the worker (needs the jobs secret) |
+| `PATCH /api/orgs` | Set the company's time zone: `{ timezone }` (owners) |
 | `GET /api/usage` | This company's AI allowance and this month's use per feature |
 | `GET, POST, DELETE /api/whatsapp/numbers` | WhatsApp numbers linked to the company; POST gives the `link <code>` to text |
 
@@ -283,6 +313,7 @@ All routes return JSON. With Supabase set up, send the signed-in user's Supabase
 | `lib/orgs.js`, `lib/phones.js`, `lib/signed.js` | Members and invites, linked WhatsApp numbers, signed values |
 | `lib/session.js`, `components/AuthPanel.jsx`, `components/AccessSection.jsx` | Sign-in in the browser, the sign-in drawer, Company → Access |
 | `supabase/schema.sql`, `supabase/seed.sql` | Database tables and starting data |
+| `lib/jobs.js`, `lib/worker.js`, `lib/jobKinds.js`, `supabase/jobs.sql`, `supabase/schedule-jobs.sql` | Background jobs: queue, worker, job steps and the schedule |
 | `lib/usage.js`, `supabase/usage.sql` | AI allowance, usage tracking, shared model status |
 | `supabase/multitenant.sql`, `supabase/claim-org.sql` | Companies, members and Row Level Security; claiming the migrated company |
 
@@ -294,7 +325,6 @@ All routes return JSON. With Supabase set up, send the signed-in user's Supabase
 - A gap check makes 8 Gemma calls and takes 15–40 seconds.
 - A product comparison makes about 7 Gemma calls and takes 30–60 seconds (longer on a slow connection; results are reused for 30 minutes). A full simulation of one product makes 4 calls. Each step is its own request, so it fits Vercel's 60-second limit.
 - Website commands open browser tabs only, not desktop apps or files.
-- The daily WhatsApp brief goes out to every company in one cron run, one after another. With many companies it should move to a job queue.
 - `data/company-context.md` and `data/product-briefs.md` describe Inovix and are only used for the `inovix` company and when there's no database.
 
 ## Credits

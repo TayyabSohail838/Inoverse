@@ -16,6 +16,7 @@ import { simulateForChat, detectSimIntent } from "@/lib/simulate";
 import { roleForSkill, roleIntro } from "@/lib/roles";
 import { bindTenant, tenantOrNull } from "@/lib/tenant";
 import { spend } from "@/lib/usage";
+import { jobsReady, enqueue, kick } from "@/lib/jobs";
 import { forgetContext } from "@/lib/context";
 
 // Every answer says out loud which executive is speaking ("CFO here. ...") and carries
@@ -107,10 +108,23 @@ export const POST = route(async (req) => {
   } else if (skill === "roast") {
     // The gap check before building anything; result + its 48-hour test are stored
     await spend("gap-check", req); // ~8 AI calls
-    const result = await runGapCheck({ idea: msg, context: await contextP, lang });
-    const ids = await saveGapCheck(msg, result);
-    forgetContext(tenantOrNull()?.orgId); // its 48-hour test is now in the company context
-    reply = { skill, ...result, ...ids };
+    if (!isDemo() && tenantOrNull()?.orgId && (await jobsReady())) {
+      // A background job in three short steps (lib/jobKinds.js), so it can't run into the
+      // 60 s limit. The app follows its progress at /api/jobs/<jobId> and shows the verdict.
+      const jobId = await enqueue("gap-check", { idea: msg, lang });
+      const origin = new URL(req.url).origin;
+      after(() => kick(origin));
+      const say =
+        lang === "ur"
+          ? "Main is idea ko paanch reviewers se check karwa raha hoon. Takreeban ek minute lagega, verdict screen par aa jayega."
+          : "I'm putting that idea in front of the five reviewers now. It takes about a minute; the verdict will appear on screen.";
+      reply = { skill, say, details: say, jobId };
+    } else {
+      const result = await runGapCheck({ idea: msg, context: await contextP, lang });
+      const ids = await saveGapCheck(msg, result);
+      forgetContext(tenantOrNull()?.orgId); // its 48-hour test is now in the company context
+      reply = { skill, ...result, ...ids };
+    }
   } else {
     const system = (await buildSystemPrompt(skill, await contextP)) + VOICE_RULES(lang);
     let out;
@@ -136,7 +150,8 @@ export const POST = route(async (req) => {
     after(() =>
       inCompany(saveMessages, [
         { role: "user", text: msg },
-        { role: "assistant", text: reply.details || reply.say, skill },
+        // a queued gap check saves its full write-up itself when it's done
+        ...(reply.jobId ? [] : [{ role: "assistant", text: reply.details || reply.say, skill }]),
       ]).catch((err) => console.warn("Couldn't save the conversation:", err.message))
     );
   return Response.json(reply);

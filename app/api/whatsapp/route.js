@@ -5,6 +5,7 @@
 //        then Inovo works on the message in the background.
 import { after } from "next/server";
 import { handleIncoming, signatureOk, whatsappConfigured } from "@/lib/whatsapp";
+import { jobsReady, enqueue, kick } from "@/lib/jobs";
 
 export const maxDuration = 60;
 
@@ -30,7 +31,12 @@ export async function POST(req) {
     return new Response("Bad JSON", { status: 400 });
   }
   const messages = (body.entry || []).flatMap((e) => (e.changes || []).flatMap((c) => c.value?.messages || []));
-  if (messages.length) {
+  if (messages.length && (await jobsReady())) {
+    // each message is its own job with retries (lib/jobKinds.js); the id stops doubles
+    for (const m of messages) await enqueue("whatsapp-message", { msg: m }, { org: null, user: null, dedupe: `wa:${m.id}` });
+    const origin = new URL(req.url).origin;
+    after(() => kick(origin));
+  } else if (messages.length) {
     after(async () => {
       for (const m of messages) {
         await handleIncoming(m).catch((err) => console.error("WhatsApp message failed:", err.message));
