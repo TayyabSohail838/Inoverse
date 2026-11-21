@@ -5,14 +5,20 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "security-check": "node scripts/security-check.mjs"
+    "security-check": "node scripts/security-check.mjs",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tests/register.mjs --test \"tests/*.test.mjs\""
   },
   "dependencies": {
     "@supabase/supabase-js": "^2",
-    "firebase": "^13.1.0",
     "next": "^15",
     "react": "^19",
     "react-dom": "^19",
     "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.2.17"
+  },
+  "engines": {
+    "node": ">=20.11"
   }
 }

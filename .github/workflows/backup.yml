@@ -1,0 +1,61 @@
+# Daily database backup. Supabase's free plan doesn't let you download backups, so this makes
+# one every night, ENCRYPTS it (this repository is public), and keeps it for 30 days under
+# Actions → Database backup → the run → Artifacts. How to restore: see BACKUPS.md.
+#
+# Needs two repository secrets (Settings → Secrets and variables → Actions):
+#   SUPABASE_DB_URL     Supabase → Connect → "Session pooler" connection string, with your
+#                       database password filled in
+#   BACKUP_PASSPHRASE   a long random password; without it a backup can't be opened, so keep
+#                       a copy somewhere safe (e.g. your password manager)
+name: Database backup
+
+on:
+  schedule:
+    - cron: "30 21 * * *" # 02:30 in Pakistan
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+    steps:
+      - name: Check the secrets are set
+        id: ready
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ] || [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "::warning::No backup made: add SUPABASE_DB_URL and BACKUP_PASSPHRASE in Settings → Secrets and variables → Actions."
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Dump the database
+        if: steps.ready.outputs.go == 'true'
+        run: |
+          set -euo pipefail
+          mkdir backup
+          stamp=$(date -u +%Y-%m-%d)
+          # pg_dump 17 reads Postgres 15 and 17 databases. Nothing is printed, so no data reaches the log.
+          dump() { docker run --rm -e PGCONNECT_TIMEOUT=30 postgres:17 pg_dump "$SUPABASE_DB_URL" --no-owner --no-privileges --quiet "$@"; }
+          dump --schema=public --format=custom > "backup/public-$stamp.dump"   # all app tables and data
+          dump --table=auth.users --data-only --format=custom > "backup/auth-users-$stamp.dump"   # sign-in accounts
+          tar -czf "inoverse-db-$stamp.tar.gz" backup
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" --symmetric --cipher-algo AES256 -o "inoverse-db-$stamp.tar.gz.gpg" "inoverse-db-$stamp.tar.gz"
+          rm -rf backup "inoverse-db-$stamp.tar.gz"
+          echo "STAMP=$stamp" >> "$GITHUB_ENV"
+          ls -lh inoverse-db-*.gpg
+
+      - name: Keep the encrypted backup for 30 days
+        if: steps.ready.outputs.go == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: inoverse-db-${{ env.STAMP }}
+          path: inoverse-db-*.tar.gz.gpg
+          retention-days: 30
+          if-no-files-found: error

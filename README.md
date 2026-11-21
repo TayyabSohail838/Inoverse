@@ -259,6 +259,11 @@ It tries every route without signing in (and, with `TEST_EMAIL` set, as a member
 8. Reload the page → the conversation is still there.
 9. Open **Simulate** → **Find our best product** → a ranked list of the Inovix products with what simulated customers said. **Full simulation** runs the two-round version for one product.
 
+**Automated tests:** `npm test` runs the checks for company separation, AI limits, background jobs
+and security in about 5 seconds, with no database or AI calls. GitHub runs them (and a production build) on every
+push, watches the live site every 30 minutes, and backs up the database nightly. See [CONTRIBUTING.md](CONTRIBUTING.md)
+and [BACKUPS.md](BACKUPS.md).
+
 ---
 
 ## How it works
