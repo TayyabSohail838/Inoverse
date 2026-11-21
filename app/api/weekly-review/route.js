@@ -47,6 +47,6 @@ Return ONLY the JSON object described in the skill, plus a "say" field: 1-2 spok
 
   const saved = await saveWeeklyReview({ updates, health, output });
   return Response.json({ review: output, health, id: saved?.id || null });
-});
+}, { ai: "weekly" });
 
 export const GET = route(async () => Response.json({ reviews: await listWeeklyReviews() }));

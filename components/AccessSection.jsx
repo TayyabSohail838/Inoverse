@@ -10,6 +10,7 @@ export default function AccessSection({ me }) {
   const [access, setAccess] = useState(null);
   const [numbers, setNumbers] = useState([]);
   const [bot, setBot] = useState("");
+  const [usage, setUsage] = useState(null);
   const [invite, setInvite] = useState({ email: "", role: "member" });
   const [phone, setPhone] = useState("");
   const [newOrg, setNewOrg] = useState("");
@@ -19,11 +20,13 @@ export default function AccessSection({ me }) {
 
   const load = useCallback(async () => {
     try {
-      const [a, n, wa] = await Promise.all([
+      const [a, n, wa, u] = await Promise.all([
         api("/api/orgs/access"),
         api("/api/whatsapp/numbers").catch(() => ({ numbers: [] })),
         api("/api/whatsapp/status").catch(() => null),
+        api("/api/usage").catch(() => null),
       ]);
+      setUsage(u);
       setAccess(a);
       setNumbers(n.numbers || []);
       setBot(wa?.botNumber || "");
@@ -198,6 +201,8 @@ export default function AccessSection({ me }) {
         <button className="btn quiet" disabled={!!busy || !phone.trim()}>{busy === "phone" ? "Adding…" : "Get code"}</button>
       </form>
 
+      <Usage usage={usage} />
+
       <h2>Another company</h2>
       <form
         className="row form"
@@ -222,5 +227,50 @@ export default function AccessSection({ me }) {
         <button className="btn quiet" disabled={!!busy || !newOrg.trim()}>{busy === "org" ? "Creating…" : "Start"}</button>
       </form>
     </section>
+  );
+}
+
+// AI allowance (what's left today / this hour) and this month's use per feature.
+const FEATURE = {
+  chat: "Chat", "gap-check": "Gap checks", voice: "Spoken replies", transcribe: "Voice input", live: "Live voice",
+  simulate: "Simulations", weekly: "Weekly reviews", draft: "Message drafts", whatsapp: "WhatsApp", "email-sync": "Email to tasks", other: "Other",
+};
+const fmt = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(n));
+const at = (iso) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+function Usage({ usage }) {
+  if (!usage || usage.demo) return null;
+  const { companyToday, youThisHour } = usage.allowance || {};
+  const month = usage.month || [];
+  if (!companyToday && !youThisHour && !month.length) return null;
+  const meter = (label, m) =>
+    m && (
+      <div className="meter-row">
+        <div className="meter-label">
+          <span>{label}</span>
+          <span className="muted">{m.used} of {m.limit} · resets {at(m.resetsAt)}</span>
+        </div>
+        <span className="meter" role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={m.limit} aria-valuenow={m.used} style={{ "--w": `${Math.min(100, (m.used / m.limit) * 100)}%` }} />
+      </div>
+    );
+  return (
+    <>
+      <h2>AI usage</h2>
+      <div className="card usage">
+        {meter("Company today", companyToday)}
+        {meter("You this hour", youThisHour)}
+        <p className="muted">A chat answer uses 1 unit, a gap check 5, a weekly review 3.</p>
+        {month.length > 0 && (
+          <ul className="list compact">
+            {month.map((r) => (
+              <li key={r.feature} className="history">
+                <span className="item-title">{FEATURE[r.feature] || r.feature}</span>
+                <span className="muted">{r.calls} AI calls · {fmt(r.tokens)} tokens this month</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </>
   );
 }

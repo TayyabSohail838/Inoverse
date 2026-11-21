@@ -6,7 +6,7 @@
 // which the browser answers with POST /api/cofounder.
 import { buildContext } from "@/lib/context";
 import { route, readJson } from "@/lib/http";
-import { cacheScope, tenantOrNull } from "@/lib/tenant";
+import { tenantOrNull } from "@/lib/tenant";
 
 export const maxDuration = 30;
 
@@ -33,25 +33,10 @@ COMPANY CONTEXT
 ${context.slice(0, 14000)}${history ? `\n\nRECENT CHAT (typed or earlier)\n${history}` : ""}`;
 }
 
-// The company context takes a few seconds (database + calendar). Keep it for 2 minutes,
-// and let the app load it early (GET) so Talk only has to make the token.
-// One entry per company: one company's context must never reach another's voice session.
-const cache = new Map(); // company -> { at, text, loading }
-function companyContext() {
-  const scope = cacheScope();
-  const c = cache.get(scope) || { at: 0, text: "", loading: null };
-  if (c.text && Date.now() - c.at < 2 * 60 * 1000) return Promise.resolve(c.text);
-  if (!c.loading) {
-    c.loading = buildContext()
-      .catch(() => "(The company details couldn't be loaded right now.)")
-      .then((text) => {
-        cache.set(scope, { at: Date.now(), text, loading: null });
-        return text;
-      });
-    cache.set(scope, c);
-  }
-  return c.loading;
-}
+// The company context takes a few seconds (database + calendar). buildContext() keeps
+// each company's copy for 90 s (and drops it when their data changes); the app loads it
+// early (GET) so Talk only has to make the token.
+const companyContext = () => buildContext().catch(() => "(The company details couldn't be loaded right now.)");
 
 export const GET = route(async () => {
   await companyContext();
@@ -117,4 +102,4 @@ export const POST = route(async (req) => {
     contextWindowCompression: { slidingWindow: {} },
   };
   return Response.json({ token, model, setup });
-});
+}, { ai: "live" });

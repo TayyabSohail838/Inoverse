@@ -15,4 +15,4 @@ export const POST = route(async (req) => {
   if (audio.length > MAX_BASE64) throw new InputError("Recording is too long. Keep it under a minute.");
   const text = await transcribe(audio, "audio/wav", lang === "ur" ? "ur" : "en");
   return Response.json({ text });
-});
+}, { ai: "transcribe" });

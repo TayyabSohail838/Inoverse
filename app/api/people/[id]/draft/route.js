@@ -35,4 +35,4 @@ Reply with ONLY JSON: {"message": "..."}`,
   const message = String(out?.message || "").trim();
   const whatsappUrl = c.phone ? `https://wa.me/${c.phone}?text=${encodeURIComponent(message)}` : null;
   return Response.json({ message, whatsappUrl });
-});
+}, { ai: "draft" });

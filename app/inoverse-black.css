@@ -245,6 +245,25 @@ body {
   flex: 1;
   border-top: 1px solid var(--woad-soft);
 }
+/* AI allowance meter (Company → Access → AI usage): a thin bar in the role colour */
+.meter-row {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.meter-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+.meter {
+  display: block;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(var(--role), var(--role)) no-repeat 0 0 / var(--w, 0%) 100%, var(--woad-soft);
+}
+
 .link-code .code {
   margin: 6px 0;
   font-family: var(--display);

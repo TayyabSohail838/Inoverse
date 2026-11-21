@@ -43,4 +43,4 @@ export const POST = route(async (req) => {
       .catch(() => {});
   }
   return wavResponse(wav);
-});
+}, { ai: "voice" });

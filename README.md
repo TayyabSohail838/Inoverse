@@ -82,15 +82,16 @@ That's enough to talk to the cofounder. Without Supabase it reads `data/company-
 3. New query again. Paste `supabase/seed.sql` and click **Run**. This adds Inovix's details, you as the first team member, and your five products.
 4. Paste `supabase/people.sql` and click **Run** (tasks, People, Google and WhatsApp tables).
 5. Paste `supabase/multitenant.sql` and click **Run**. This adds accounts and companies: each company sees only its own data. Your existing data (from `seed.sql`) moves into a company called `inovix`. Run `seed.sql` *before* this file, not after.
-6. Open `supabase/claim-org.sql`, put **your** email on the select line, and **Run** it. That invites you as the owner of the `inovix` company; you join it the first time you sign in.
-7. Open **Project Settings** → **API** (or **API Keys**). Copy:
+6. Paste `supabase/usage.sql` and click **Run**. It adds AI usage limits and tracking (see "AI usage" below).
+7. Open `supabase/claim-org.sql`, put **your** email on the select line, and **Run** it. That invites you as the owner of the `inovix` company; you join it the first time you sign in.
+8. Open **Project Settings** → **API** (or **API Keys**). Copy:
    - the **Project URL** → `SUPABASE_URL`
    - the **service_role** key (on newer dashboards, the **secret** key) → `SUPABASE_SERVICE_ROLE_KEY`
    - the **anon** / **publishable** key → `SUPABASE_ANON_KEY`
-8. Add all three to `.env.local`.
-9. **Authentication → URL Configuration**: set **Site URL** to `http://localhost:3000` (your Vercel URL once deployed) and add `http://localhost:3000/**` and `https://<your-vercel-domain>/**` under **Redirect URLs**.
-10. **Authentication → Providers → Email**: keep **Confirm email** on. Invites are claimed by email address, so only a confirmed address may claim one.
-11. Optional, "Continue with Google": **Authentication → Providers → Google** → on, with a Google OAuth client ID and secret. In Google Cloud, add `https://<project-id>.supabase.co/auth/v1/callback` as an authorised redirect URI of that client. The button appears by itself once it's on.
+9. Add all three to `.env.local`.
+10. **Authentication → URL Configuration**: set **Site URL** to `http://localhost:3000` (your Vercel URL once deployed) and add `http://localhost:3000/**` and `https://<your-vercel-domain>/**` under **Redirect URLs**.
+11. **Authentication → Providers → Email**: keep **Confirm email** on. Invites are claimed by email address, so only a confirmed address may claim one.
+12. Optional, "Continue with Google": **Authentication → Providers → Google** → on, with a Google OAuth client ID and secret. In Google Cloud, add `https://<project-id>.supabase.co/auth/v1/callback` as an authorised redirect URI of that client. The button appears by itself once it's on.
 
 **Keys and privacy.** The service role key can read and write everything. It stays on the server and is never sent to the browser. Never commit `.env.local` or paste this key into the frontend. The anon key is public by design: the browser signs in with it, and the database's Row Level Security policies (in `multitenant.sql`) only let a signed-in person reach the companies they belong to. Google sign-ins and WhatsApp numbers have no policy at all, so only the server can read them.
 
@@ -176,7 +177,34 @@ This uses Meta's official WhatsApp Business Cloud API. It needs the **Vercel lin
 1. Push the project to GitHub and import it in **Vercel**.
 2. In Vercel → **Settings** → **Environment Variables**, add `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY` and `APP_SECRET` (any long random string; it signs the Google connect step).
 3. Decide what the link is for. On Vercel the app runs as the **public demo** by default (sample data, nothing saved, no sign-in). To let real companies sign up and use it, set `DEMO_MODE=off`. Then everyone signs in and sees only their own company.
-4. Add your Vercel URL to Supabase → Authentication → URL Configuration (step 2.9).
+4. Add your Vercel URL to Supabase → Authentication → URL Configuration (step 2.10).
+
+### AI usage: limits and tracking
+
+All companies share one `GEMINI_API_KEY`, so each one gets an allowance, counted in units:
+a chat answer, a spoken reply or a voice input is 1 unit, Live voice 2, a weekly review 3, a gap check 5.
+
+| Setting | Default | Means |
+| --- | --- | --- |
+| `AI_LIMIT_USER_HOUR` | 60 | Units one signed-in person can use per hour |
+| `AI_LIMIT_ORG_DAY` | 400 | Units one company can use per day (resets at midnight UTC) |
+| `AI_LIMIT_IP_HOUR` | 30 | Units per visitor per hour on the public demo |
+
+Set any of them to `off` to remove that limit. When a limit is reached, Inovo says when it resets
+instead of failing. Each company sees its allowance and this month's use in **Company → Access → AI usage**.
+
+Every AI call is stored in `ai_usage` (company, person, feature, model, tokens, time). To see what each
+company used this month, run this in the Supabase SQL Editor:
+
+```sql
+select o.name, u.feature, count(*) as calls, sum(u.input_tokens + u.output_tokens) as tokens
+from ai_usage u join organizations o on o.id = u.org_id
+where u.created_at >= date_trunc('month', now()) and not u.demo
+group by 1, 2 order by 4 desc;
+```
+
+Which models are busy or out of quota is shared through `ai_model_status`, so every server copy skips
+them straight away. If `usage.sql` hasn't been run, nothing breaks: limits and tracking are simply off.
 
 ---
 
@@ -233,6 +261,7 @@ All routes return JSON. With Supabase set up, send the signed-in user's Supabase
 | `GET /api/me` | The signed-in user, their companies and the open one |
 | `POST /api/orgs` | Start a company: `{ name }` (you become its owner) |
 | `GET, POST /api/orgs/access` · `DELETE /api/orgs/access/:id` | Members and invites; owners invite (`{ email, role }`) and remove; `?kind=invite` cancels an invite |
+| `GET /api/usage` | This company's AI allowance and this month's use per feature |
 | `GET, POST, DELETE /api/whatsapp/numbers` | WhatsApp numbers linked to the company; POST gives the `link <code>` to text |
 
 ## Files
@@ -254,6 +283,7 @@ All routes return JSON. With Supabase set up, send the signed-in user's Supabase
 | `lib/orgs.js`, `lib/phones.js`, `lib/signed.js` | Members and invites, linked WhatsApp numbers, signed values |
 | `lib/session.js`, `components/AuthPanel.jsx`, `components/AccessSection.jsx` | Sign-in in the browser, the sign-in drawer, Company → Access |
 | `supabase/schema.sql`, `supabase/seed.sql` | Database tables and starting data |
+| `lib/usage.js`, `supabase/usage.sql` | AI allowance, usage tracking, shared model status |
 | `supabase/multitenant.sql`, `supabase/claim-org.sql` | Companies, members and Row Level Security; claiming the migrated company |
 
 ## Known limits

@@ -249,6 +249,8 @@ Supabase is set up (not on the public demo).
   `.row.form` pieces as the rest of the panel.
 - **WhatsApp link code** (`.link-code .code`): the `link 123456` text people send, in Anton at
   30px in the role colour, selectable with one click. It's the one thing to copy, so it's big.
+- **AI usage** (Company → Access): one thin meter per allowance (`.meter`, 4px, `--role` on
+  `--woad-soft`), with "used of limit · resets at" in `--cotton-dim`, then this month's calls per feature.
 - Switching company or signing out reloads the page, so nothing from the previous company
   stays on screen.
 

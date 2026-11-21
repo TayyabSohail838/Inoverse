@@ -95,4 +95,4 @@ export const POST = route(async (req) => {
     default:
       throw new InputError("Unknown step.");
   }
-});
+}, { ai: "simulate" });

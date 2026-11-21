@@ -14,7 +14,9 @@ import { detectEmailIntent, emailBrief } from "@/lib/emailBrief";
 import { isDemo } from "@/lib/demo";
 import { simulateForChat, detectSimIntent } from "@/lib/simulate";
 import { roleForSkill, roleIntro } from "@/lib/roles";
-import { bindTenant } from "@/lib/tenant";
+import { bindTenant, tenantOrNull } from "@/lib/tenant";
+import { spend } from "@/lib/usage";
+import { forgetContext } from "@/lib/context";
 
 // Every answer says out loud which executive is speaking ("CFO here. ...") and carries
 // that role, so the screen can tag it and colour the globe.
@@ -61,6 +63,7 @@ You are talking out loud with the founder, like a cofounder across the table. Re
 ${lang === "ur" ? 'Write "say" in simple Roman Urdu. Write "details" in English.' : ""}`;
 
 export const POST = route(async (req) => {
+  // (charged one "chat" unit by route(); a simulation or gap check costs more, below)
   const { message, history = [], lang = "en" } = await readJson(req);
   if (typeof message !== "string" || !message.trim()) throw new InputError("message is required");
   const msg = message.trim().slice(0, 4000);
@@ -99,11 +102,14 @@ export const POST = route(async (req) => {
   let reply;
   if (skill === "market-sim") {
     // MiroFish-style market simulation: one product, or every product ranked
+    await spend("simulate", req);
     reply = await simulateForChat({ message: msg, lang });
   } else if (skill === "roast") {
     // The gap check before building anything; result + its 48-hour test are stored
+    await spend("gap-check", req); // ~8 AI calls
     const result = await runGapCheck({ idea: msg, context: await contextP, lang });
     const ids = await saveGapCheck(msg, result);
+    forgetContext(tenantOrNull()?.orgId); // its 48-hour test is now in the company context
     reply = { skill, ...result, ...ids };
   } else {
     const system = (await buildSystemPrompt(skill, await contextP)) + VOICE_RULES(lang);
@@ -134,4 +140,4 @@ export const POST = route(async (req) => {
       ]).catch((err) => console.warn("Couldn't save the conversation:", err.message))
     );
   return Response.json(reply);
-});
+}, { ai: "chat" });
