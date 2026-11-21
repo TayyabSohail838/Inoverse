@@ -68,7 +68,8 @@ export const POST = route(async (req) => {
   const { message, history = [], lang = "en" } = await readJson(req);
   if (typeof message !== "string" || !message.trim()) throw new InputError("message is required");
   const msg = message.trim().slice(0, 4000);
-  const hist = Array.isArray(history) ? history.slice(-8) : [];
+  // last 8 turns, each cut to a sensible length (the text comes from the browser)
+  const hist = (Array.isArray(history) ? history.slice(-8) : []).map((m) => ({ role: m?.role === "assistant" ? "assistant" : "user", text: String(m?.text || "").slice(0, 4000) }));
 
   // "Open YouTube", "search for X", "WhatsApp kholo": instant, no Gemma call, not saved
   const open = detectOpenIntent(msg);

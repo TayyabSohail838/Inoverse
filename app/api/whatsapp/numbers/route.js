@@ -5,6 +5,7 @@ import { route, readJson } from "@/lib/http";
 import { listNumbers, addNumber, removeNumber } from "@/lib/phones";
 import { demoReadOnly, isDemo } from "@/lib/demo";
 import { orgReady } from "@/lib/db";
+import { hit } from "@/lib/ratelimit";
 
 export const GET = route(async () => {
   if (isDemo() || !orgReady()) return Response.json({ numbers: [] });
@@ -13,6 +14,7 @@ export const GET = route(async () => {
 
 export const POST = route(async (req) => {
   demoReadOnly();
+  await hit("add-number", req);
   const { phone } = await readJson(req);
   return Response.json(await addNumber(phone), { status: 201 });
 });

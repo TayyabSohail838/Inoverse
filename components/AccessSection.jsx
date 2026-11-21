@@ -205,7 +205,7 @@ export default function AccessSection({ me }) {
         <div key={n.phone} className="card link-code">
           <p className="muted">From {n.masked}, send this to Inovo on WhatsApp{bot ? ` (${bot})` : ""}:</p>
           <p className="code">link {n.code}</p>
-          <p className="muted">The code works for 24 hours.</p>
+          <p className="muted">The code works for 15 minutes. If it runs out, add the number again for a new one.</p>
         </div>
       ))}
       <form

@@ -10,7 +10,7 @@ export const maxDuration = 60;
 const MAX_BASE64 = 4_000_000; // about 60 seconds of 16 kHz mono WAV
 
 export const POST = route(async (req) => {
-  const { audio, lang = "en" } = await readJson(req);
+  const { audio, lang = "en" } = await readJson(req, { max: MAX_BASE64 + 10_000 });
   if (typeof audio !== "string" || !audio) throw new InputError("audio is required");
   if (audio.length > MAX_BASE64) throw new InputError("Recording is too long. Keep it under a minute.");
   const text = await transcribe(audio, "audio/wav", lang === "ur" ? "ur" : "en");

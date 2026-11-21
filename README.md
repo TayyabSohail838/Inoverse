@@ -177,7 +177,7 @@ This uses Meta's official WhatsApp Business Cloud API. It needs the **Vercel lin
 ### 8. Deploy (optional)
 
 1. Push the project to GitHub and import it in **Vercel**.
-2. In Vercel → **Settings** → **Environment Variables**, add `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY` and `APP_SECRET` (any long random string; it signs the Google connect step).
+2. In Vercel → **Settings** → **Environment Variables**, add `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`, `APP_SECRET` (any long random string; it signs the Google connect step) and `ENCRYPTION_KEY` (another long random string; it encrypts saved Google sign-in keys). See [SECURITY.md](SECURITY.md) for the full checklist.
 3. Decide what the link is for. On Vercel the app runs as the **public demo** by default (sample data, nothing saved, no sign-in). To let real companies sign up and use it, set `DEMO_MODE=off`. Then everyone signs in and sees only their own company.
 4. Add your Vercel URL to Supabase → Authentication → URL Configuration (step 2.10).
 
@@ -233,6 +233,19 @@ Which models are busy or out of quota is shared through `ai_model_status`, so ev
 them straight away. If `usage.sql` hasn't been run, nothing breaks: limits and tracking are simply off.
 
 ---
+
+### Security
+
+Each company's data is separated by database rules and checked on every request; saved Google
+sign-in keys are encrypted; repeated actions are rate-limited; and security headers stop other sites
+from framing or scripting Inoverse. [SECURITY.md](SECURITY.md) has the details, the secrets checklist
+and the Supabase settings to turn on. After adding an API route, run:
+
+```bash
+node scripts/security-check.mjs http://localhost:3000
+```
+
+It tries every route without signing in (and, with `TEST_EMAIL` set, as a member of the wrong company) and fails if any route lets it through.
 
 ## Test it
 

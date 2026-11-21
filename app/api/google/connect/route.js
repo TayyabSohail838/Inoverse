@@ -9,12 +9,14 @@ import { isDemo } from "@/lib/demo";
 import { route } from "@/lib/http";
 import { tenantOrNull } from "@/lib/tenant";
 import { sign } from "@/lib/signed";
+import { hit } from "@/lib/ratelimit";
 
 export const POST = route(async (req) => {
   const url = new URL(req.url);
   // the public demo never connects a real inbox
   if (isDemo()) return Response.json({ url: "/?gmail=demo" });
   if (!googleConfigured()) return Response.json({ url: "/?gmail=not-configured" });
+  await hit("google-connect", req);
 
   const t = tenantOrNull(); // null in single-laptop mode (no database)
   const nonce = randomBytes(16).toString("hex");

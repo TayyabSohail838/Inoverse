@@ -6,10 +6,12 @@ import { createOrg, setTimezone, validTimezone } from "@/lib/orgs";
 import { forgetToken } from "@/lib/auth";
 import { tenant } from "@/lib/tenant";
 import { demoReadOnly } from "@/lib/demo";
+import { hit } from "@/lib/ratelimit";
 
 export const POST = route(
   async (req) => {
     demoReadOnly();
+    await hit("create-org", req);
     const { name, timezone } = await readJson(req);
     const org = await createOrg(name);
     // you're its owner now, so you may set it; quietly skipped if jobs.sql isn't run yet

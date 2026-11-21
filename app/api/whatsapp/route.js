@@ -20,7 +20,10 @@ export async function GET(req) {
 
 export async function POST(req) {
   if (!whatsappConfigured()) return new Response("WhatsApp is not set up", { status: 503 });
+  // Meta sends small JSON messages; refuse anything big before reading it
+  if (Number(req.headers.get("content-length") || 0) > 1_000_000) return new Response("Too large", { status: 413 });
   const raw = await req.text();
+  if (raw.length > 1_000_000) return new Response("Too large", { status: 413 });
   if (!signatureOk(raw, req.headers.get("x-hub-signature-256"))) {
     return new Response("Bad signature", { status: 401 });
   }
