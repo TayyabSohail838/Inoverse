@@ -346,9 +346,12 @@ export default function LandingPage({ onEnter }) {
           </div>
           <footer className="lp-foot">
             <span>© 2026 Inovix &amp; Co · Faisalabad</span>
-            <a href="https://github.com/TayyabSohail838/Inoverse/blob/main/LICENSE" target="_blank" rel="noreferrer">
-              MIT License
-            </a>
+            <span>
+              <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> ·{" "}
+              <a href="https://github.com/TayyabSohail838/Inoverse/blob/main/LICENSE" target="_blank" rel="noreferrer">
+                MIT License
+              </a>
+            </span>
             <span>Runs on Gemma</span>
           </footer>
         </section>
