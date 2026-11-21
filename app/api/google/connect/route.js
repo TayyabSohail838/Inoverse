@@ -1,27 +1,29 @@
-// GET /api/google/connect → sends you to Google to let Inoverse read your "Inovo" emails.
-// This is a normal page visit (not a fetch), so the access code comes as ?access=.
+// POST /api/google/connect → { url }: where to send the browser to let Inoverse read your
+// "Inovo" emails and calendar. The app then goes to that URL.
+// A fetch (not a page visit), so the sign-in and company come with it like any API call.
+// The company travels to the callback inside a signed, 10-minute state value, and a
+// matching cookie proves the same browser started it.
 import { randomBytes } from "node:crypto";
 import { authUrl, googleConfigured } from "@/lib/google";
 import { isDemo } from "@/lib/demo";
+import { route } from "@/lib/http";
+import { tenantOrNull } from "@/lib/tenant";
+import { sign } from "@/lib/signed";
 
-export async function GET(req) {
+export const POST = route(async (req) => {
   const url = new URL(req.url);
   // the public demo never connects a real inbox
-  if (isDemo()) return Response.redirect(new URL("/?gmail=demo", url), 302);
-  const code = process.env.ACCESS_CODE;
-  if (code && url.searchParams.get("access") !== code) {
-    return new Response("Access code required.", { status: 401 });
-  }
-  if (!googleConfigured()) {
-    return Response.redirect(new URL("/?gmail=not-configured", url), 302);
-  }
-  // random state, checked on the way back, so nobody else can finish this sign-in
-  const state = randomBytes(16).toString("hex");
-  return new Response(null, {
-    status: 302,
+  if (isDemo()) return Response.json({ url: "/?gmail=demo" });
+  if (!googleConfigured()) return Response.json({ url: "/?gmail=not-configured" });
+
+  const t = tenantOrNull(); // null in single-laptop mode (no database)
+  const nonce = randomBytes(16).toString("hex");
+  const state = sign({ nonce, org: t?.orgId || null, user: t?.userId || null }, 600);
+  return new Response(JSON.stringify({ url: authUrl(url.origin, state) }), {
+    status: 200,
     headers: {
-      Location: authUrl(url.origin, state),
-      "Set-Cookie": `g_oauth_state=${state}; Path=/api/google; HttpOnly; SameSite=Lax; Max-Age=600${url.protocol === "https:" ? "; Secure" : ""}`,
+      "Content-Type": "application/json",
+      "Set-Cookie": `g_oauth_state=${nonce}; Path=/api/google; HttpOnly; SameSite=Lax; Max-Age=600${url.protocol === "https:" ? "; Secure" : ""}`,
     },
   });
-}
+});

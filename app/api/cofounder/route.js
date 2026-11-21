@@ -14,6 +14,7 @@ import { detectEmailIntent, emailBrief } from "@/lib/emailBrief";
 import { isDemo } from "@/lib/demo";
 import { simulateForChat, detectSimIntent } from "@/lib/simulate";
 import { roleForSkill, roleIntro } from "@/lib/roles";
+import { bindTenant } from "@/lib/tenant";
 
 // Every answer says out loud which executive is speaking ("CFO here. ...") and carries
 // that role, so the screen can tag it and colour the globe.
@@ -123,9 +124,11 @@ export const POST = route(async (req) => {
   reply = announce(reply, lang);
 
   // Save the chat after the answer is sent, so the founder never waits on it. Demo visitors' chats aren't kept.
+  // inCompany keeps this request's company for the save that runs after the reply.
+  const inCompany = bindTenant();
   if (!isDemo())
     after(() =>
-      saveMessages([
+      inCompany(saveMessages, [
         { role: "user", text: msg },
         { role: "assistant", text: reply.details || reply.say, skill },
       ]).catch((err) => console.warn("Couldn't save the conversation:", err.message))

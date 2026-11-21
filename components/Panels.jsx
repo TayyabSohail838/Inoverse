@@ -2,6 +2,7 @@
 // Evidence, Tests, Weekly review and Company tabs. Each reads and writes through /api.
 import { useCallback, useEffect, useState } from "react";
 import { api, cached } from "@/lib/api";
+import AccessSection from "@/components/AccessSection";
 
 const shortDate = (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 const daysSince = (d) => Math.max(0, Math.floor((Date.now() - Date.parse(d)) / 864e5));
@@ -398,7 +399,7 @@ export function WeeklyPanel({ dbReady, lang, onSpeak }) {
 // ---------------- Company ----------------
 const STAGES = ["idea", "prototype", "pilot", "live", "paying", "paused"];
 
-export function CompanyPanel({ dbReady }) {
+export function CompanyPanel({ dbReady, me }) {
   const first = cached("/api/company");
   const [data, setData] = useState(first || null);
   const [profile, setProfile] = useState({ name: first?.profile?.name || "", about: first?.profile?.about || "" });
@@ -588,6 +589,8 @@ export function CompanyPanel({ dbReady }) {
         </label>
         <button className="btn quiet" disabled={!!busy || !product.name.trim()}>{busy === "newProduct" ? "Adding…" : "Add product"}</button>
       </form>
+
+      <AccessSection me={me} />
     </div>
   );
 }

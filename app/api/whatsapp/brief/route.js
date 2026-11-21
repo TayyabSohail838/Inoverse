@@ -1,6 +1,6 @@
-// GET  /api/whatsapp/brief → sent by Vercel Cron every morning (see vercel.json)
+// GET  /api/whatsapp/brief → sent by Vercel Cron every morning (see vercel.json): one brief per company
 // POST /api/whatsapp/brief → "Send me today's brief" button in the app
-import { sendBrief, whatsappConfigured } from "@/lib/whatsapp";
+import { sendBrief, sendAllBriefs, whatsappConfigured } from "@/lib/whatsapp";
 import { route } from "@/lib/http";
 import { isDemo } from "@/lib/demo";
 
@@ -14,7 +14,7 @@ export async function GET(req) {
   }
   if (!whatsappConfigured()) return Response.json({ sent: false, reason: "WhatsApp is not set up." });
   try {
-    return Response.json(await sendBrief());
+    return Response.json(await sendAllBriefs());
   } catch (err) {
     console.error("Morning brief:", err.message);
     return Response.json({ sent: false, reason: err.message }, { status: 500 });

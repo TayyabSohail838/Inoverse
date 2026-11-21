@@ -1,27 +1,35 @@
-// GET /api/status → what is configured, for the setup screen. Never returns secrets.
-import { db, dbEnabled, COMPANY } from "@/lib/db";
+// GET /api/status → what is configured, for the setup screen. Public; never returns secrets.
+// The Supabase URL and anon key are public by design (the browser signs in with them;
+// Row Level Security decides what they can reach).
+import { serviceDb, dbEnabled, anonKey, supabaseUrl } from "@/lib/db";
 import { isDemo } from "@/lib/demo";
+import { authRequired, authConfigured } from "@/lib/auth";
 
 export async function GET() {
   const status = {
-    accessCodeRequired: Boolean(process.env.ACCESS_CODE),
+    accessCodeRequired: Boolean(process.env.ACCESS_CODE) && !dbEnabled(),
     demo: isDemo(), // public link: sample data instead of the founder's real tasks, people and email
     gemma: {
       configured: Boolean(process.env.GEMINI_API_KEY),
       model: process.env.GEMMA_MODEL || "gemma-4-31b-it",
     },
-    supabase: { configured: dbEnabled(), ok: false, seeded: false, error: null },
+    supabase: { configured: dbEnabled(), ok: false, error: null },
+    auth: {
+      required: authRequired(),
+      configured: authConfigured(),
+      url: authRequired() && authConfigured() ? supabaseUrl() : null,
+      anonKey: authRequired() && authConfigured() ? anonKey() : null,
+    },
   };
 
   if (status.supabase.configured) {
     try {
-      const { data, error } = await db().from("company_profile").select("company").eq("company", COMPANY).maybeSingle();
+      const { error } = await serviceDb().from("organizations").select("id").limit(1);
       if (error) throw new Error(error.message);
       status.supabase.ok = true;
-      status.supabase.seeded = Boolean(data);
     } catch (err) {
-      status.supabase.error = /relation .* does not exist|schema cache/i.test(err.message)
-        ? "Tables not found. Run supabase/schema.sql in the Supabase SQL Editor."
+      status.supabase.error = /organizations|relation .* does not exist|schema cache/i.test(err.message)
+        ? "Multi-company tables not found. Run supabase/multitenant.sql in the Supabase SQL Editor."
         : err.message;
     }
   }

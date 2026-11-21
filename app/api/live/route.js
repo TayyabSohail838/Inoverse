@@ -6,21 +6,22 @@
 // which the browser answers with POST /api/cofounder.
 import { buildContext } from "@/lib/context";
 import { route, readJson } from "@/lib/http";
+import { cacheScope, tenantOrNull } from "@/lib/tenant";
 
 export const maxDuration = 30;
 
 const API = "https://generativelanguage.googleapis.com/v1alpha/auth_tokens";
 
-function instructions(lang, context, history) {
+function instructions(lang, context, history, company) {
   const urdu = lang === "ur";
-  return `You are Inovo, the voice AI cofounder inside Inoverse, talking live with the founder of Inovix & Co, M Tayyab Sohail. Call him "boss" now and then.
+  return `You are Inovo, the voice AI cofounder inside Inoverse, talking live with the founder of ${company || "this company"}. Call them "boss" now and then.
 Talk like a cofounder across the table: warm, direct and honest. Keep every turn to 1-3 short spoken sentences. No lists, no markdown, no reading out symbols.
-${urdu ? 'Speak natural Pakistani Urdu, mixing in the English business words people really use. Start the conversation by saying "Hey boss, Inoverse mein khush aamdeed!" and ask in a few words what is on his mind.' : 'Start the conversation by saying exactly "Hey boss, welcome to Inoverse!" and then ask in a few words what is on his mind.'}
-Support him; don't nag about pending projects unless he asks about them.
+${urdu ? 'Speak natural Pakistani Urdu, mixing in the English business words people really use. Start the conversation by saying "Hey boss, Inoverse mein khush aamdeed!" and ask in a few words what is on their mind.' : 'Start the conversation by saying exactly "Hey boss, welcome to Inoverse!" and then ask in a few words what is on their mind.'}
+Support them; don't nag about pending projects unless they ask about them.
 
 TOOL: inovo_brain runs Inovo's Gemma skills on the company's live data. ALWAYS call it when the founder asks to:
 - simulate customers, compare products, or which product is best or to focus on;
-- read or summarise his emails or inbox;
+- read or summarise their emails or inbox;
 - check a new idea before building (gap check), scope a client project or quote a price;
 - price a product, plan the week, or review the team;
 - open a website or search something;
@@ -34,18 +35,22 @@ ${context.slice(0, 14000)}${history ? `\n\nRECENT CHAT (typed or earlier)\n${his
 
 // The company context takes a few seconds (database + calendar). Keep it for 2 minutes,
 // and let the app load it early (GET) so Talk only has to make the token.
-let cached = { at: 0, text: "", loading: null };
+// One entry per company: one company's context must never reach another's voice session.
+const cache = new Map(); // company -> { at, text, loading }
 function companyContext() {
-  if (cached.text && Date.now() - cached.at < 2 * 60 * 1000) return Promise.resolve(cached.text);
-  if (!cached.loading) {
-    cached.loading = buildContext()
-      .catch(() => "Inovix & Co, a pre-revenue AI startup in Faisalabad, Pakistan.")
+  const scope = cacheScope();
+  const c = cache.get(scope) || { at: 0, text: "", loading: null };
+  if (c.text && Date.now() - c.at < 2 * 60 * 1000) return Promise.resolve(c.text);
+  if (!c.loading) {
+    c.loading = buildContext()
+      .catch(() => "(The company details couldn't be loaded right now.)")
       .then((text) => {
-        cached = { at: Date.now(), text, loading: null };
+        cache.set(scope, { at: Date.now(), text, loading: null });
         return text;
       });
+    cache.set(scope, c);
   }
-  return cached.loading;
+  return c.loading;
 }
 
 export const GET = route(async () => {
@@ -87,7 +92,7 @@ export const POST = route(async (req) => {
       responseModalities: ["AUDIO"],
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: process.env.TTS_VOICE || "Charon" } } },
     },
-    systemInstruction: { parts: [{ text: instructions(lang, context, history) }] },
+    systemInstruction: { parts: [{ text: instructions(lang, context, history, tenantOrNull()?.orgName) }] },
     tools: [
       {
         functionDeclarations: [
@@ -98,7 +103,7 @@ export const POST = route(async (req) => {
             parameters: {
               type: "OBJECT",
               properties: {
-                request: { type: "STRING", description: "The founder's request, in his own words, with any detail he gave." },
+                request: { type: "STRING", description: "The founder's request, in their own words, with any detail they gave." },
               },
               required: ["request"],
             },

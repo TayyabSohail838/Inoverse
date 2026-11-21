@@ -231,6 +231,27 @@ the page fades out and the app's own entrance plays.
 **Rules:** no logo walls, testimonials or numbers we can't back up; every claim on the page
 must match a feature the app has.
 
+## Accounts
+
+Each company's data is private to the people in it, so the app opens with sign-in when
+Supabase is set up (not on the public demo).
+
+- **Sign-in lives in the drawer**, not over the stage: the globe stays in view and alive
+  while you sign in. The drawer opens by itself with "Sign in" (email + password, an
+  emailed link, or Google when it's switched on in Supabase), then "Your company" for
+  someone who isn't in one yet (start one, or get invited). It can't be closed until done.
+  See [components/AuthPanel.jsx](components/AuthPanel.jsx).
+- **The open company** is a small uppercase label after the tagline (`.org-name`), split
+  from it by a thin `--woad` line. Plain `--cotton`, no accent. Hidden on phones with the tagline.
+- **Company → Access** ([components/AccessSection.jsx](components/AccessSection.jsx)), at the
+  bottom of the Company panel: who you are, switching company, people with access and invites,
+  linked WhatsApp numbers, starting another company, sign out. Same `.card`, `.list.compact`,
+  `.row.form` pieces as the rest of the panel.
+- **WhatsApp link code** (`.link-code .code`): the `link 123456` text people send, in Anton at
+  30px in the role colour, selectable with one click. It's the one thing to copy, so it's big.
+- Switching company or signing out reloads the page, so nothing from the previous company
+  stays on screen.
+
 ## Controls
 
 - **Talk:** a pill with a thin role-coloured border, a faint glass fill and a soft glow.
@@ -264,6 +285,8 @@ must match a feature the app has.
 | [components/Globe.jsx](components/Globe.jsx) | The globe. |
 | [components/CofounderApp.jsx](components/CofounderApp.jsx) | Stage layout, conversation list, role corner, dock, panels. |
 | [lib/roles.js](lib/roles.js) | Roles, colours, skill → role and panel → role mappings, the spoken intro. |
+| [components/AuthPanel.jsx](components/AuthPanel.jsx) | Sign-in and "Your company" in the drawer. |
+| [components/AccessSection.jsx](components/AccessSection.jsx) | Company → Access: members, invites, WhatsApp numbers, switch company. |
 | [lib/skills.js](lib/skills.js) | The skill list the router chooses from, and the "who is speaking" prompt. |
 | [skills/](skills/) | One file per skill, including the C-suite executives. |
 

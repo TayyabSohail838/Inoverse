@@ -1,7 +1,9 @@
 "use client";
 // The whole app: the woven 3D cofounder on the left, the working panel on the right.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, prefetch, setAccessCode, getAccessCode } from "@/lib/api";
+import { api, prefetch, setAccessCode, authHeaders } from "@/lib/api";
+import { initAuth, accessToken, authClient, getOrgId, setOrgId } from "@/lib/session";
+import AuthPanel from "@/components/AuthPanel";
 import { EvidencePanel, TestsPanel, WeeklyPanel, CompanyPanel } from "@/components/Panels";
 import Markdown, { plainText } from "@/components/Markdown";
 import { toWavBase64 } from "@/lib/wav";
@@ -38,6 +40,8 @@ export default function CofounderApp() {
   const [status, setStatus] = useState(null);
   const [tab, setTab] = useState(null); // which dock panel is open (null = none)
   const [needCode, setNeedCode] = useState(false);
+  const [me, setMe] = useState(null); // signed-in user and open company (GET /api/me)
+  const [gate, setGate] = useState(""); // "" | "signin" | "org": what the drawer asks for before the app opens
   const [codeInput, setCodeInput] = useState("");
   const [roleKey, setRoleKey] = useState("cofounder"); // which hat Inovo is wearing (globe colour)
   const [rolePicker, setRolePicker] = useState(false);
@@ -58,7 +62,9 @@ export default function CofounderApp() {
   const langRef = useRef("en");
   const logEndRef = useRef(null);
 
-  const dbReady = Boolean(status?.supabase?.ok);
+  const authOn = Boolean(status?.auth?.required);
+  // the panels may load data once the database is ready and, with accounts on, a company is open
+  const dbReady = Boolean(status?.supabase?.ok) && (!authOn || Boolean(me?.org));
 
   // hide the caption once the exchange is over
   useEffect(() => {
@@ -73,9 +79,10 @@ export default function CofounderApp() {
   }, [lang]);
   useEffect(() => {
     if (!liveOn) return void liveRef.current?.end();
+    if (!status || (authOn && !me?.org)) return;
     // get the company context ready now, so the first Talk starts faster
-    fetch("/api/live").catch(() => {});
-  }, [liveOn]);
+    api("/api/live").catch(() => {});
+  }, [liveOn, status, authOn, me]);
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [log, tab]);
@@ -85,6 +92,19 @@ export default function CofounderApp() {
     try {
       const s = await fetch("/api/status").then((r) => r.json());
       setStatus(s);
+      if (s.auth?.required) {
+        // accounts: sign in, then pick (or start) a company, before loading anything private
+        if (!s.auth.configured || !s.supabase?.ok) return; // SetupNotice says what's missing
+        initAuth({ url: s.auth.url, anonKey: s.auth.anonKey });
+        if (!(await accessToken())) return setGate("signin");
+        const who = await api("/api/me");
+        setMe(who);
+        if (!who.org) return setGate("org");
+        if (who.org.id !== getOrgId()) setOrgId(who.org.id); // remember the company that opened
+        setGate("");
+        // back from Google sign-in or an email link: tidy the address
+        if (new URLSearchParams(window.location.search).has("auth")) window.history.replaceState(null, "", `${window.location.pathname}#app`);
+      }
       if (s.supabase?.ok) {
         // load every panel's data now, so opening a panel shows it straight away
         prefetch(PANEL_DATA);
@@ -97,6 +117,20 @@ export default function CofounderApp() {
       setError(e.message);
     }
   }, []);
+
+  // Signed in (form, Google or email link) or out: reload. Only while the sign-in panel is up
+  // or on sign-out, since Supabase also reports routine token refreshes.
+  const gateRef = useRef(gate);
+  gateRef.current = gate;
+  useEffect(() => {
+    const sb = authClient();
+    if (!sb) return;
+    const { data } = sb.auth.onAuthStateChange((event) => {
+      // run outside Supabase's callback (it must not wait on other Supabase calls)
+      if ((event === "SIGNED_IN" && gateRef.current) || event === "SIGNED_OUT") setTimeout(loadStatus, 0);
+    });
+    return () => data.subscription.unsubscribe();
+  }, [status?.auth?.url, loadStatus]);
 
   // Check Gmail for new "Inovo" emails when the app opens and every 5 minutes.
   useEffect(() => {
@@ -128,12 +162,18 @@ export default function CofounderApp() {
     loadStatus();
     const onNeed = () => setNeedCode(true);
     window.addEventListener("cofounder:need-code", onNeed);
+    const onNeedAuth = () => setGate("signin");
+    const onNeedOrg = () => setGate("org");
+    window.addEventListener("inoverse:need-auth", onNeedAuth);
+    window.addEventListener("inoverse:need-org", onNeedOrg);
     if (window.speechSynthesis) {
       window.speechSynthesis.getVoices();
       window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
     }
     return () => {
       window.removeEventListener("cofounder:need-code", onNeed);
+      window.removeEventListener("inoverse:need-auth", onNeedAuth);
+      window.removeEventListener("inoverse:need-org", onNeedOrg);
       cancelRecording();
       stopMeter();
       stopVoice();
@@ -600,9 +640,7 @@ export default function CofounderApp() {
     setState("thinking");
     const spans = [{ text }];
 
-    const headers = { "Content-Type": "application/json" };
-    const code = getAccessCode();
-    if (code) headers["x-access-code"] = code;
+    const headers = await authHeaders();
     const clips = spans.map((sp) =>
       fetch("/api/speak", { method: "POST", headers, body: JSON.stringify({ text: sp.text, lang: langRef.current }) })
         .then((r) => {
@@ -770,7 +808,7 @@ export default function CofounderApp() {
 
   return (
     <div
-      className={`app ${panel ? "has-panel" : ""}`}
+      className={`app ${panel || gate ? "has-panel" : ""}`}
       style={{ "--role": role.color, "--role-2": role.color2 }}
     >
       <section className={`stage s-${state}`} aria-label="Inovo">
@@ -782,6 +820,7 @@ export default function CofounderApp() {
           <h1 className="brand-name">Inoverse</h1>
           <p className="brand-sub">
             Inovo, your AI cofounder
+            {me?.org && <span className="org-name" title="The company Inovo is working for">{me.org.name}</span>}
             {status?.demo && <span className="demo-badge" title="Public demo: sample Inovix data, nothing private">Demo</span>}
           </p>
           <div className="toggles" role="group" aria-label="Voice settings">
@@ -893,7 +932,7 @@ export default function CofounderApp() {
               </div>
             </form>
           )}
-          <SetupNotice status={status} />
+          <SetupNotice status={status} me={me} />
         </div>
 
         <div className="stage-foot">
@@ -934,8 +973,18 @@ export default function CofounderApp() {
       </section>
 
       {/* slide-in panel for the dock feature */}
-      <aside className={`drawer ${panel ? "open" : ""}`} aria-label={panel ? panel.label : undefined} aria-hidden={!panel}>
-        {panel && (
+      <aside className={`drawer ${panel || gate ? "open" : ""}`} aria-label={gate ? "Sign in" : panel ? panel.label : undefined} aria-hidden={!panel && !gate}>
+        {gate && (
+          <>
+            <header className="drawer-head">
+              <h2>{gate === "org" ? "Your company" : "Sign in"}</h2>
+            </header>
+            <div className="drawer-body">
+              <AuthPanel mode={gate} email={me?.user?.email || ""} onDone={loadStatus} />
+            </div>
+          </>
+        )}
+        {!gate && panel && (
           <>
             <header className="drawer-head">
               <h2>{panel.title}</h2>
@@ -1016,7 +1065,7 @@ export default function CofounderApp() {
               {tab === "evidence" && <EvidencePanel dbReady={dbReady} />}
               {tab === "tests" && <TestsPanel dbReady={dbReady} />}
               {tab === "weekly" && <WeeklyPanel dbReady={dbReady} lang={lang} onSpeak={speak} />}
-              {tab === "company" && <CompanyPanel dbReady={dbReady} />}
+              {tab === "company" && <CompanyPanel dbReady={dbReady} me={me} />}
             </div>
           </>
         )}
@@ -1112,13 +1161,14 @@ const SKILL_NAMES = {
   "general-counsel": "Legal",
 };
 
-function SetupNotice({ status }) {
+function SetupNotice({ status, me }) {
   if (!status) return null;
   const notes = [];
   if (!status.gemma.configured) notes.push("Add GEMINI_API_KEY to .env.local and restart the app so Inovo can answer.");
   if (!status.supabase.configured) notes.push("No database connected. Answers work, but evidence, tests and reviews won't be saved until you connect Supabase.");
   else if (!status.supabase.ok) notes.push(`Supabase is connected but not ready: ${status.supabase.error}`);
-  else if (!status.supabase.seeded) notes.push("Supabase is ready. Run supabase/seed.sql, or add your company details in the Company tab.");
+  else if (status.auth?.required && !status.auth.configured) notes.push("Sign-in isn't set up yet. Add SUPABASE_ANON_KEY (Supabase → Project Settings → API) to .env.local and restart.");
+  else if (me?.org && !me.profileSet) notes.push("Tell Inovo about your company in the Company tab, so its advice fits you.");
   if (!notes.length) return null;
   return (
     <div className="notice" role="status">

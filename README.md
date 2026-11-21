@@ -80,14 +80,21 @@ That's enough to talk to the cofounder. Without Supabase it reads `data/company-
 1. Go to **https://supabase.com** → **New project**. Pick a name, a database password, and the region nearest to you. Wait for it to finish setting up.
 2. Open **SQL Editor** → **New query**. Paste all of `supabase/schema.sql` and click **Run**. You should see "Success. No rows returned".
 3. New query again. Paste `supabase/seed.sql` and click **Run**. This adds Inovix's details, you as the first team member, and your five products.
-4. Open **Project Settings** → **API** (or **API Keys**). Copy:
+4. Paste `supabase/people.sql` and click **Run** (tasks, People, Google and WhatsApp tables).
+5. Paste `supabase/multitenant.sql` and click **Run**. This adds accounts and companies: each company sees only its own data. Your existing data (from `seed.sql`) moves into a company called `inovix`. Run `seed.sql` *before* this file, not after.
+6. Open `supabase/claim-org.sql`, put **your** email on the select line, and **Run** it. That invites you as the owner of the `inovix` company; you join it the first time you sign in.
+7. Open **Project Settings** → **API** (or **API Keys**). Copy:
    - the **Project URL** → `SUPABASE_URL`
    - the **service_role** key (on newer dashboards, the **secret** key) → `SUPABASE_SERVICE_ROLE_KEY`
-5. Add both to `.env.local`.
+   - the **anon** / **publishable** key → `SUPABASE_ANON_KEY`
+8. Add all three to `.env.local`.
+9. **Authentication → URL Configuration**: set **Site URL** to `http://localhost:3000` (your Vercel URL once deployed) and add `http://localhost:3000/**` and `https://<your-vercel-domain>/**` under **Redirect URLs**.
+10. **Authentication → Providers → Email**: keep **Confirm email** on. Invites are claimed by email address, so only a confirmed address may claim one.
+11. Optional, "Continue with Google": **Authentication → Providers → Google** → on, with a Google OAuth client ID and secret. In Google Cloud, add `https://<project-id>.supabase.co/auth/v1/callback` as an authorised redirect URI of that client. The button appears by itself once it's on.
 
-The service role key can read and write everything. It stays on the server and is never sent to the browser. Never commit `.env.local` or paste this key into the frontend.
+**Keys and privacy.** The service role key can read and write everything. It stays on the server and is never sent to the browser. Never commit `.env.local` or paste this key into the frontend. The anon key is public by design: the browser signs in with it, and the database's Row Level Security policies (in `multitenant.sql`) only let a signed-in person reach the companies they belong to. Google sign-ins and WhatsApp numbers have no policy at all, so only the server can read them.
 
-All tables have Row Level Security switched on with no policies, so the public "anon" key can't read anything. Only the app's server can.
+**Accounts and companies.** People sign in with email + password, an emailed link, or Google. A new person starts a company (they become its owner) or is invited to one: **Company → Access → Invite by email**. Owners invite and remove people; anyone can leave. One person can belong to several companies and switch between them in Company → Access.
 
 ### 3. Run it
 
@@ -95,13 +102,13 @@ All tables have Row Level Security switched on with no policies, so the public "
 npm run dev
 ```
 
-Open **http://localhost:3000** and allow the microphone. If something is missing, a yellow notice at the top of the panel says exactly what to fix. Once everything is configured, the notice disappears.
+Open **http://localhost:3000**, sign in in the panel on the right, and allow the microphone. If something is missing, a notice says exactly what to fix. Once everything is configured, the notice disappears.
 
 Open the **Company** tab and add your teammate (name and role). The cofounder assigns tasks only to people listed there.
 
-### 4. Tables for tasks, people and WhatsApp (1 minute)
+### 4. Upgrading an older install
 
-In Supabase → **SQL Editor** → **New query**, paste all of `supabase/people.sql` and click **Run**. It creates the tables for tasks, the People panel, the Google connection and the WhatsApp bot. (New installs get them from `schema.sql` already.)
+Already ran `schema.sql` and `people.sql` before? Run `supabase/multitenant.sql`, then `supabase/claim-org.sql` with your email (steps 5–6 above), add `SUPABASE_ANON_KEY`, and restart. Nothing is deleted: every row is moved into the `inovix` company.
 
 ### 5. Connect Google: Gmail + Calendar (optional, about 15 minutes)
 
@@ -138,7 +145,7 @@ Open **Simulate** in the dock (Inovo switches to its CMO role). Modelled on the 
 
 ### 7. Connect WhatsApp: text Inovo from your phone (optional, about 30 minutes)
 
-Text Inovo like a person: *"Meeting with Ahmed from Al-Noor clinic Monday 4pm, he wants a quote"* → Inovo replies, saves the meeting as a task and Ahmed in People. Voice notes work. Send **brief** for today's plan. Every morning at 8:00 (Pakistan time) Inovo sends you a brief.
+Text Inovo like a person: *"Meeting with Ahmed from Al-Noor clinic Monday 4pm, he wants a quote"* → Inovo replies, saves the meeting as a task and Ahmed in People. Voice notes work. Send **brief** for today's plan. Every morning at 8:00 (Pakistan time) Inovo sends each company's linked numbers their brief.
 
 This uses Meta's official WhatsApp Business Cloud API. It needs the **Vercel link** (Meta must reach a public address) and a phone number that isn't already on WhatsApp (Meta gives you a free test number to start).
 
@@ -152,20 +159,24 @@ This uses Meta's official WhatsApp Business Cloud API. It needs the **Vercel lin
    WHATSAPP_PHONE_NUMBER_ID=from API Setup
    WHATSAPP_APP_SECRET=from App settings → Basic
    WHATSAPP_VERIFY_TOKEN=any password you make up
-   WHATSAPP_OWNER_NUMBER=923001234567   (your number; only it can talk to Inovo; comma-separate to add teammates)
+   WHATSAPP_DISPLAY_NUMBER=+1 555 0100  (optional: Inovo's number, shown in the app when linking)
    CRON_SECRET=another long random password (for the morning brief)
    ```
    Redeploy.
 6. **WhatsApp → Configuration → Webhook → Edit**: callback URL `https://<your-vercel-domain>/api/whatsapp`, verify token = your `WHATSAPP_VERIFY_TOKEN` → **Verify and save**. Then **Manage** → subscribe to **messages**.
-7. Text the test number from your phone: "hi Inovo".
+7. Link your phone to your company: in the app open **Company → Access → WhatsApp**, add your number, and text the code it shows (`link 123456`) to Inovo from that phone. Each teammate links their own number the same way. Only linked numbers get answers, and each number belongs to one company, so Inovo always answers with the right company's data.
+8. Text Inovo: "hi Inovo".
+
+(`WHATSAPP_OWNER_NUMBER` from older setups still works for the `inovix` company without linking.)
 
 **The morning brief and WhatsApp's 24-hour rule:** WhatsApp lets Inovo send you normal messages only within 24 hours of your last message to it. Text it once a day and the brief always arrives. To get it even when you haven't, create a template in **WhatsApp Manager → Message templates** (category **Utility**, body `{{1}}`), wait for approval, and set `WHATSAPP_BRIEF_TEMPLATE=<template name>` (and `WHATSAPP_BRIEF_TEMPLATE_LANG` if it isn't `en`).
 
 ### 8. Deploy (optional)
 
 1. Push the project to GitHub and import it in **Vercel**.
-2. In Vercel → **Settings** → **Environment Variables**, add `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
-3. Add `ACCESS_CODE` with a code of your choice. Anyone opening the link must enter it once, so strangers can't use your Gemma quota or read your company data.
+2. In Vercel → **Settings** → **Environment Variables**, add `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY` and `APP_SECRET` (any long random string; it signs the Google connect step).
+3. Decide what the link is for. On Vercel the app runs as the **public demo** by default (sample data, nothing saved, no sign-in). To let real companies sign up and use it, set `DEMO_MODE=off`. Then everyone signs in and sees only their own company.
+4. Add your Vercel URL to Supabase → Authentication → URL Configuration (step 2.9).
 
 ---
 
@@ -205,7 +216,7 @@ Logging a test result as passed or failed files it as evidence, so each gap chec
 
 ## API
 
-All routes return JSON. When `ACCESS_CODE` is set, send it in the `x-access-code` header.
+All routes return JSON. With Supabase set up, send the signed-in user's Supabase access token as `Authorization: Bearer <token>` and the open company as `x-org-id` (optional; defaults to the user's first company). Without a database, `ACCESS_CODE` (if set) goes in the `x-access-code` header.
 
 | Route | Does |
 | --- | --- |
@@ -219,6 +230,10 @@ All routes return JSON. When `ACCESS_CODE` is set, send it in the `x-access-code
 | `POST /api/team` · `DELETE /api/team/:id` | Team members |
 | `POST /api/products` · `PATCH, DELETE /api/products/:id` | Products and their stage |
 | `GET /api/status` | What's configured (never returns secrets) |
+| `GET /api/me` | The signed-in user, their companies and the open one |
+| `POST /api/orgs` | Start a company: `{ name }` (you become its owner) |
+| `GET, POST /api/orgs/access` · `DELETE /api/orgs/access/:id` | Members and invites; owners invite (`{ email, role }`) and remove; `?kind=invite` cancels an invite |
+| `GET, POST, DELETE /api/whatsapp/numbers` | WhatsApp numbers linked to the company; POST gives the `link <code>` to text |
 
 ## Files
 
@@ -235,7 +250,11 @@ All routes return JSON. When `ACCESS_CODE` is set, send it in the `x-access-code
 | `lib/verdict.js`, `lib/cheapestTest.js`, `lib/commitmentHealth.js` | Scoring in plain code |
 | `lib/openIntent.js` | Website and search commands |
 | `lib/db.js`, `lib/store.js`, `lib/context.js` | Supabase access and the company context |
+| `lib/tenant.js`, `lib/auth.js` | Which company a request is for, from the signed-in user |
+| `lib/orgs.js`, `lib/phones.js`, `lib/signed.js` | Members and invites, linked WhatsApp numbers, signed values |
+| `lib/session.js`, `components/AuthPanel.jsx`, `components/AccessSection.jsx` | Sign-in in the browser, the sign-in drawer, Company → Access |
 | `supabase/schema.sql`, `supabase/seed.sql` | Database tables and starting data |
+| `supabase/multitenant.sql`, `supabase/claim-org.sql` | Companies, members and Row Level Security; claiming the migrated company |
 
 ## Known limits
 
@@ -245,7 +264,8 @@ All routes return JSON. When `ACCESS_CODE` is set, send it in the `x-access-code
 - A gap check makes 8 Gemma calls and takes 15–40 seconds.
 - A product comparison makes about 7 Gemma calls and takes 30–60 seconds (longer on a slow connection; results are reused for 30 minutes). A full simulation of one product makes 4 calls. Each step is its own request, so it fits Vercel's 60-second limit.
 - Website commands open browser tabs only, not desktop apps or files.
-- One company per deployment for now (`COMPANY_SLUG`, default `inovix`).
+- The daily WhatsApp brief goes out to every company in one cron run, one after another. With many companies it should move to a job queue.
+- `data/company-context.md` and `data/product-briefs.md` describe Inovix and are only used for the `inovix` company and when there's no database.
 
 ## Credits
 

@@ -2,7 +2,7 @@
 // Tasks panel: your upcoming tasks and meetings (Inovo reads them before every answer),
 // plus the Google (Gmail + Calendar) and WhatsApp connections.
 import { useCallback, useEffect, useState } from "react";
-import { api, cached, getAccessCode } from "@/lib/api";
+import { api, cached } from "@/lib/api";
 
 const dueText = (iso) => {
   if (!iso) return "No date";
@@ -147,8 +147,16 @@ export default function TasksPanel({ dbReady }) {
     }
   }
 
-  const code = getAccessCode();
-  const connectHref = `/api/google/connect${code ? `?access=${encodeURIComponent(code)}` : ""}`;
+  // The server signs which company is connecting, then the browser goes to Google.
+  async function connectGoogle(e) {
+    e?.preventDefault();
+    try {
+      const { url } = await api("/api/google/connect", { method: "POST" });
+      window.location.assign(url);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
   const now = Date.now();
 
   return (
@@ -205,7 +213,7 @@ export default function TasksPanel({ dbReady }) {
             <p className="muted">
               Inovo will read only emails whose subject starts with <b>Inovo</b>. Nothing else in your inbox is touched.
             </p>
-            <a className="btn" href={connectHref}>Connect Gmail</a>
+            <button className="btn" onClick={connectGoogle}>Connect Gmail</button>
           </>
         ) : (
           <>
@@ -218,7 +226,7 @@ export default function TasksPanel({ dbReady }) {
             </p>
             {!gmail.calendar && (
               <p className="warn">
-                Calendar isn't connected yet. <a href={connectHref}>Connect Google again</a> and allow calendar access so
+                Calendar isn't connected yet. <button className="link" onClick={connectGoogle}>Connect Google again</button> and allow calendar access so
                 Inovo sees your meetings.
               </p>
             )}

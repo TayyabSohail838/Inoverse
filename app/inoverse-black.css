@@ -212,6 +212,48 @@ body {
   color: var(--cotton-dim);
 }
 
+/* ---------- accounts: open company, sign-in drawer, WhatsApp link code ---------- */
+/* the company Inovo is working for, after the tagline; a small label, no new accent */
+.org-name {
+  margin-left: 8px;
+  padding-left: 8px;
+  border-left: 1px solid var(--woad);
+  color: var(--cotton);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.auth .seg {
+  align-self: flex-start;
+}
+.auth .link {
+  justify-self: start;
+}
+.auth-or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  color: var(--cotton-dim);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.auth-or::before,
+.auth-or::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--woad-soft);
+}
+.link-code .code {
+  margin: 6px 0;
+  font-family: var(--display);
+  font-size: 30px;
+  letter-spacing: 0.06em;
+  color: var(--role);
+  user-select: all; /* one click selects it for copying */
+}
+
 /* ---------- top right: the conversation ---------- */
 .feed {
   position: absolute;
