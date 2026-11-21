@@ -12,6 +12,7 @@ import TasksPanel from "@/components/TasksPanel";
 import PeoplePanel from "@/components/PeoplePanel";
 import SimulatePanel from "@/components/SimulatePanel";
 import ChatOverview from "@/components/ChatOverview";
+import SetupChecklist from "@/components/SetupChecklist";
 import Globe from "@/components/Globe";
 import { ROLES, roleByKey, roleForSkill, roleForPanel } from "@/lib/roles";
 import { LiveVoice, liveSupported } from "@/lib/liveVoice";
@@ -41,6 +42,7 @@ export default function CofounderApp() {
   const [tab, setTab] = useState(null); // which dock panel is open (null = none)
   const [needCode, setNeedCode] = useState(false);
   const [me, setMe] = useState(null); // signed-in user and open company (GET /api/me)
+  const [models, setModels] = useState(null); // which AI model answers now (GET /api/models)
   const [gate, setGate] = useState(""); // "" | "signin" | "org": what the drawer asks for before the app opens
   const [codeInput, setCodeInput] = useState("");
   const [roleKey, setRoleKey] = useState("cofounder"); // which hat Inovo is wearing (globe colour)
@@ -192,6 +194,21 @@ export default function CofounderApp() {
       clearInterval(t);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
+    };
+  }, [dbReady]);
+
+  // Which AI model is answering: checked on open and every 2 minutes while the app is on screen,
+  // so a "backup model" note shows when Google's limit on the main model is reached.
+  useEffect(() => {
+    if (!dbReady) return;
+    const check = () => {
+      if (document.visibilityState === "visible") api("/api/models").then(setModels).catch(() => {});
+    };
+    const first = setTimeout(check, 2500);
+    const t = setInterval(check, 2 * 60 * 1000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(t);
     };
   }, [dbReady]);
 
@@ -900,6 +917,17 @@ export default function CofounderApp() {
             Inovo, your AI cofounder
             {me?.org && <span className="org-name" title="The company Inovo is working for">{me.org.name}</span>}
             {status?.demo && <span className="demo-badge" title="Public demo: sample Inovix data, nothing private">Demo</span>}
+            {(() => {
+              // answers (and every skill behind Live) use the chat models; Live's own voice model too when Live is on
+              const m = models?.chat?.onBackup ? models.chat : liveOn ? models?.live : null;
+              if (!m?.onBackup) return null;
+              const back = m.backUntil ? ` It's tried again at ${new Date(m.backUntil).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.` : "";
+              return (
+                <span className="model-badge" role="status" title={`${m.main} has reached Google's limit or is busy, so ${m.active} is answering.${back} Details: Company → AI usage.`}>
+                  Backup model: {m.active}
+                </span>
+              );
+            })()}
           </p>
           <div className="toggles" role="group" aria-label="Voice settings">
             <button aria-pressed={lang === "en"} onClick={() => setLang("en")}>EN</button>
@@ -1011,6 +1039,7 @@ export default function CofounderApp() {
             </form>
           )}
           <SetupNotice status={status} me={me} />
+          {dbReady && tab === null && <SetupChecklist me={me} status={status} tab={tab} onOpen={setTab} />}
         </div>
 
         <div className="stage-foot">
@@ -1254,7 +1283,7 @@ function SetupNotice({ status, me }) {
   if (!status.supabase.configured) notes.push("No database connected. Answers work, but evidence, tests and reviews won't be saved until you connect Supabase.");
   else if (!status.supabase.ok) notes.push(`Supabase is connected but not ready: ${status.supabase.error}`);
   else if (status.auth?.required && !status.auth.configured) notes.push("Sign-in isn't set up yet. Add SUPABASE_ANON_KEY (Supabase → Project Settings → API) to .env.local and restart.");
-  else if (me?.org && !me.profileSet) notes.push("Tell Inovo about your company in the Company tab, so its advice fits you.");
+  else if (me?.org && !me.profileSet && me.org.role !== "owner") notes.push("Tell Inovo about your company in the Company tab, so its advice fits you.");
   if (!notes.length) return null;
   return (
     <div className="notice" role="status">

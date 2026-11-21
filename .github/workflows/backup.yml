@@ -42,7 +42,7 @@ jobs:
           mkdir backup
           stamp=$(date -u +%Y-%m-%d)
           # pg_dump 17 reads Postgres 15 and 17 databases. Nothing is printed, so no data reaches the log.
-          dump() { docker run --rm -e PGCONNECT_TIMEOUT=30 postgres:17 pg_dump "$SUPABASE_DB_URL" --no-owner --no-privileges --quiet "$@"; }
+          dump() { docker run --rm -e PGCONNECT_TIMEOUT=30 postgres:17 pg_dump "$SUPABASE_DB_URL" --no-owner --no-privileges "$@"; }
           dump --schema=public --format=custom > "backup/public-$stamp.dump"   # all app tables and data
           dump --table=auth.users --data-only --format=custom > "backup/auth-users-$stamp.dump"   # sign-in accounts
           tar -czf "inoverse-db-$stamp.tar.gz" backup

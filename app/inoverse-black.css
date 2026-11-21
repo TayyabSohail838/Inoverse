@@ -302,6 +302,132 @@ body {
   user-select: all; /* one click selects it for copying */
 }
 
+/* one-tap WhatsApp linking: a button (phone) and a QR code (laptop) side by side */
+.link-ways {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  margin: 10px 0;
+}
+.link-way {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  flex: 1 1 180px;
+}
+.link-way .btn {
+  justify-self: start;
+  text-decoration: none;
+}
+.qr {
+  display: block;
+  width: 132px;
+  height: 132px;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+.qr svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* which AI model answers now (Company → AI usage), and the header note when a backup is in use */
+.models {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--woad-soft);
+}
+.model-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: var(--malachite);
+  vertical-align: 1px;
+}
+.model-dot.backup {
+  background: #f5b84b;
+}
+.model-badge {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, #f5b84b 55%, transparent);
+  color: #f5b84b;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* "Set up your company" checklist on the main screen (narrower than other notices, so it
+   sits between the name on the left and the conversation on the right) */
+.stage-notices > .setup {
+  width: min(480px, 100%);
+}
+.setup {
+  padding: 12px 14px;
+  border: 1px solid var(--woad-soft);
+  border-radius: var(--radius-sm);
+  font-size: var(--step--1);
+}
+.setup-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.setup-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cotton);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+.setup-steps {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.setup-steps li {
+  display: grid;
+  grid-template-columns: 20px 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+.setup-text {
+  display: grid;
+  gap: 2px;
+}
+.setup-check {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--woad);
+  border-radius: 50%;
+  font-size: 11px;
+  color: #000;
+}
+.setup-steps li.done .setup-check {
+  border-color: var(--malachite);
+  background: var(--malachite);
+}
+.setup-steps li.done .item-title {
+  color: var(--cotton-dim);
+  text-decoration: line-through;
+}
+
 /* ---------- top right: the conversation ---------- */
 .feed {
   position: absolute;

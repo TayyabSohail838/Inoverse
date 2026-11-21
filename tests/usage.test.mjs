@@ -95,3 +95,14 @@ test("a busy model is shared with every server copy", async () => {
   ok(inserts.some((i) => i.table === "ai_model_status" && i.row.model === "gemma-test"), "saved for everyone");
   ok((await restingUntil("gemma-test")) > Date.now(), "and skipped until it's ready");
 });
+
+test("the app is told which model is answering", async () => {
+  const { modelStatus, modelLabel } = await import("@/lib/gemma");
+  ok(modelLabel("gemma-4-31b-it") === "Gemma 4 31B" && modelLabel("gemini-3.5-flash-lite") === "Gemini 3.5 Flash Lite", "model names read well");
+  const before = await modelStatus();
+  ok(before.chat.onBackup === false && before.chat.active === "Gemma 4 31B", "normally the main model answers", JSON.stringify(before.chat));
+  await rest("gemma-4-31b-it", 5 * 60_000, "limit reached");
+  const after = await modelStatus();
+  ok(after.chat.onBackup === true && after.chat.active === "Gemma 4 26B" && after.chat.backUntil, "when it's at its limit, the backup is shown with when the main one is back", JSON.stringify(after.chat));
+  ok(after.live.onBackup === false, "live voice has its own models");
+});

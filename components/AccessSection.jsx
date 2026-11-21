@@ -202,11 +202,7 @@ export default function AccessSection({ me }) {
         ))}
       </ul>
       {pending.map((n) => (
-        <div key={n.phone} className="card link-code">
-          <p className="muted">From {n.masked}, send this to Inovo on WhatsApp{bot ? ` (${bot})` : ""}:</p>
-          <p className="code">link {n.code}</p>
-          <p className="muted">The code works for 15 minutes. If it runs out, add the number again for a new one.</p>
-        </div>
+        <LinkCode key={n.phone} number={n} bot={bot} />
       ))}
       <form
         className="row form"
@@ -252,6 +248,58 @@ export default function AccessSection({ me }) {
   );
 }
 
+// Linking a WhatsApp number in one tap: a button that opens WhatsApp with "link 123456"
+// already typed to Inovo (just press Send), and a QR code to scan with the phone from a laptop.
+// Without Inovo's number (WHATSAPP_DISPLAY_NUMBER) it falls back to "send this code".
+function LinkCode({ number, bot, compact = false }) {
+  const digits = (bot || "").replace(/\D/g, "");
+  const text = `link ${number.code}`;
+  const href = digits ? `https://wa.me/${digits}?text=${encodeURIComponent(text)}` : "";
+  const [qr, setQr] = useState("");
+  useEffect(() => {
+    if (!href) return;
+    let alive = true;
+    import("qrcode")
+      .then((QR) => QR.toString(href, { type: "svg", margin: 1, color: { dark: "#000000", light: "#ffffff" } }))
+      .then((svg) => alive && setQr(svg))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [href]);
+
+  return (
+    <div className="card link-code">
+      {href ? (
+        <>
+          <p className="muted">Link {number.masked} to Inovo:</p>
+          <div className="link-ways">
+            <div className="link-way">
+              <p className="item-title">On this phone</p>
+              <a className="btn" href={href} target="_blank" rel="noreferrer">Open WhatsApp</a>
+              <p className="muted">The message is typed for you. Just press Send.</p>
+            </div>
+            {qr && !compact && (
+              <div className="link-way">
+                <p className="item-title">On a laptop</p>
+                <span className="qr" role="img" aria-label={`QR code: opens WhatsApp with “${text}” to Inovo`} dangerouslySetInnerHTML={{ __html: qr }} />
+                <p className="muted">Scan with {number.masked}'s phone camera, then press Send.</p>
+              </div>
+            )}
+          </div>
+          <p className="muted">Or send <b>{text}</b> to {bot} yourself. It works for 15 minutes.</p>
+        </>
+      ) : (
+        <>
+          <p className="muted">From {number.masked}, send this to Inovo on WhatsApp:</p>
+          <p className="code">{text}</p>
+          <p className="muted">The code works for 15 minutes. If it runs out, add the number again for a new one.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
 // AI allowance (what's left today / this hour) and this month's use per feature.
 const FEATURE = {
   chat: "Chat", "gap-check": "Gap checks", voice: "Spoken replies", transcribe: "Voice input", live: "Live voice",
@@ -260,11 +308,42 @@ const FEATURE = {
 const fmt = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(n));
 const at = (iso) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
+// Which AI model answers right now. When Google's limit on the main model is reached (or it's
+// busy), Inovo switches to a backup model by itself; this says so, and when the main one is back.
+export function ModelStatus({ models }) {
+  if (!models?.chat) return null;
+  const line = (label, m) => (
+    <li className="history model-line">
+      <span className="item-title">{label}</span>
+      {m.onBackup ? (
+        <span className="muted">
+          <span className="model-dot backup" aria-hidden="true" /> {m.main} is at its limit, so {m.active} is answering
+          {m.backUntil ? ` (back at ${at(m.backUntil)})` : ""}
+        </span>
+      ) : (
+        <span className="muted">
+          <span className="model-dot" aria-hidden="true" /> {m.active}
+        </span>
+      )}
+    </li>
+  );
+  return (
+    <div className="models">
+      <p className="meter-label"><span>AI model running now</span></p>
+      <ul className="list compact">
+        {line("Answers", models.chat)}
+        {models.live && line("Live voice", models.live)}
+      </ul>
+      <p className="muted">Shared by every company on Inoverse. If a model reaches Google's limit, a backup takes over by itself.</p>
+    </div>
+  );
+}
+
 function Usage({ usage }) {
   if (!usage || usage.demo) return null;
   const { companyToday, youThisHour } = usage.allowance || {};
   const month = usage.month || [];
-  if (!companyToday && !youThisHour && !month.length) return null;
+  if (!companyToday && !youThisHour && !month.length && !usage.models) return null;
   const meter = (label, m) =>
     m && (
       <div className="meter-row">
@@ -282,6 +361,7 @@ function Usage({ usage }) {
         {meter("Company today", companyToday)}
         {meter("You this hour", youThisHour)}
         <p className="muted">A chat answer uses 1 unit, a gap check 5, a weekly review 3.</p>
+        <ModelStatus models={usage.models} />
         {month.length > 0 && (
           <ul className="list compact">
             {month.map((r) => (

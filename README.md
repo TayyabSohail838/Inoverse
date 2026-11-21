@@ -260,8 +260,8 @@ It tries every route without signing in (and, with `TEST_EMAIL` set, as a member
 9. Open **Simulate** → **Find our best product** → a ranked list of the Inovix products with what simulated customers said. **Full simulation** runs the two-round version for one product.
 
 **Automated tests:** `npm test` runs the checks for company separation, AI limits, background jobs
-and security in about 5 seconds, with no database or AI calls. GitHub runs them (and a production build) on every
-push, watches the live site every 30 minutes, and backs up the database nightly. See [CONTRIBUTING.md](CONTRIBUTING.md)
+and security in about 5 seconds, with no database or AI calls. Run them before
+merging to main. GitHub backs up the database nightly. See [CONTRIBUTING.md](CONTRIBUTING.md)
 and [BACKUPS.md](BACKUPS.md).
 
 ---
@@ -308,7 +308,8 @@ All routes return JSON. With Supabase set up, send the signed-in user's Supabase
 | `GET /api/jobs/:id` | A background job's status and stage, and its result when done (the company's own jobs only) |
 | `POST /api/jobs/run` | Starts the worker (needs the jobs secret) |
 | `PATCH /api/orgs` | Set the company's time zone: `{ timezone }` (owners) |
-| `GET /api/usage` | This company's AI allowance and this month's use per feature |
+| `GET /api/usage` | This company's AI allowance, this month's use per feature, and which AI model is answering |
+| `GET /api/models` | Which AI model is answering right now (main or backup), shown in the app when a backup is in use |
 | `GET, POST, DELETE /api/whatsapp/numbers` | WhatsApp numbers linked to the company; POST gives the `link <code>` to text |
 
 ## Files
