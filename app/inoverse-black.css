@@ -756,6 +756,26 @@ body {
   }
 }
 
+/* An open panel narrows the stage to (window − panel). When that leaves 1180px or less
+   (windows up to 1700px), use the same layout as a narrow window: dock bottom-centre,
+   Talk and the role above it. Otherwise the dock slides under Talk. */
+@media (min-width: 1000px) and (max-width: 1700px) {
+  .app.has-panel .stage-foot {
+    bottom: calc(var(--edge) + 72px);
+    width: clamp(260px, 100% - 2 * var(--edge) - 480px, 420px);
+  }
+  .app.has-panel .dock {
+    right: 50%;
+    transform: translateX(50%);
+  }
+  .app.has-panel .role {
+    bottom: calc(var(--edge) + 72px);
+  }
+  .app.has-panel .role-name {
+    font-size: clamp(44px, 6vw, 72px);
+  }
+}
+
 /* ---------- phones (portrait) ----------
    From the bottom up: the dock (two rows of four, so every feature shows without
    sideways scrolling), then the role on the left with Talk on the right, then the

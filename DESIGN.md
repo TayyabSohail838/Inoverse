@@ -53,6 +53,7 @@ The distance from the screen edge is one token everywhere: `--edge: clamp(16px, 
 |---|---|
 | ≥ 1000px with a panel open | The stage shrinks to the left of the panel (`right: var(--drawer-w)`); the conversation list hides, since the panel shows the full chat. |
 | ≤ 1180px | The dock moves to bottom-centre; Talk and the role move up above it. |
+| ≤ 1700px with a panel open | Same as ≤ 1180px, because the panel leaves the stage 1180px wide or less. Without this the dock slides under Talk. |
 | ≤ 760px (phones) | The globe is smaller and higher. The conversation list moves above the role and shows ~5 lines. Talk sits bottom-right. The dock spans the full width. |
 
 ## Colour
